@@ -2,7 +2,9 @@ package components
 
 import (
 	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/keymap"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/styles"
 )
 
@@ -28,7 +30,8 @@ func NewConfirmDialog(message, action string, projectID, jobID int) ConfirmDialo
 func (d ConfirmDialog) Update(msg tea.Msg) (ConfirmDialog, *ConfirmResult) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := keymap.Normalize(msg.String())
+		switch key {
 		case "left", "h":
 			d.focused = 0
 		case "right", "l":
@@ -45,8 +48,8 @@ func (d ConfirmDialog) Update(msg tea.Msg) (ConfirmDialog, *ConfirmResult) {
 }
 
 func (d ConfirmDialog) View() string {
-	yes := " Yes "
-	no := " No "
+	yes := " Да "
+	no := " Нет "
 	if d.focused == 0 {
 		yes = styles.Selected.Render(yes)
 	} else {

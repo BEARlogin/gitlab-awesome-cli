@@ -12,6 +12,7 @@ import (
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/components"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/keymap"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/styles"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/views"
 )
@@ -183,7 +184,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.jobsView.SetHeight(msg.Height)
 		a.logView, _ = a.logView.Update(msg)
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := keymap.Normalize(msg.String())
+		switch key {
 		case "ctrl+c", "q":
 			return a, tea.Quit
 		case "esc":
@@ -206,7 +208,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 		}
-		return a, a.delegateToView(msg)
+		// Normalize key for views
+		normalizedMsg := tea.KeyMsg(tea.Key{Type: msg.Type, Runes: []rune(key)})
+		if key != msg.String() {
+			normalizedMsg = tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune(key)})
+		}
+		return a, a.delegateToView(normalizedMsg)
 	case projectsLoadedMsg:
 		a.projectsView.Projects = msg.projects
 	case allPipelinesLoadedMsg:
