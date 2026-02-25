@@ -35,7 +35,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 	if cfg.RefreshInterval == 0 {
-		cfg.RefreshInterval = 5 * time.Second
+		cfg.RefreshInterval = 10 * time.Second
 	}
 	if cfg.PipelineLimit == 0 {
 		cfg.PipelineLimit = 50
@@ -54,7 +54,7 @@ func (c *Config) Save(path string) error {
 func RunSetupWizard() (*Config, error) {
 	reader := bufio.NewReader(os.Stdin)
 	cfg := &Config{
-		RefreshInterval: 5 * time.Second,
+		RefreshInterval: 10 * time.Second,
 	}
 
 	fmt.Print("GitLab URL (e.g. https://gitlab.example.com): ")

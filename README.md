@@ -54,6 +54,7 @@ Monitor pipelines across all your projects, stream job logs, retry failures, and
 - **Vim-style navigation** — `j`/`k`, `g`/`G`, `Ctrl+u`/`Ctrl+d`
 - **Russian keyboard layout support** — keys work regardless of active layout
 - **Clean config** — single YAML file at `~/.glcli.yaml`
+- **MCP Server** — let AI assistants (Claude Code, etc.) interact with your GitLab via Model Context Protocol
 
 ---
 
@@ -196,6 +197,64 @@ pipeline_limit: 50
 
 ---
 
+## MCP Server (AI Integration)
+
+glcli ships with a built-in [MCP](https://modelcontextprotocol.io/) server — a separate binary that lets AI assistants work with your GitLab directly from the terminal.
+
+### Install
+
+```bash
+make build-mcp
+# or
+go install github.com/bearlogin/gitlab-awesome-cli/cmd/glcli-mcp@latest
+```
+
+### Register in Claude Code
+
+Add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "glcli": {
+      "command": "glcli-mcp"
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_projects` | List configured projects with pipeline counts |
+| `list_pipelines` | List pipelines with optional filters (project, status, ref, limit) |
+| `list_jobs` | List jobs for a specific pipeline |
+| `get_job_log` | Get the log output of a job |
+| `play_job` | Start a manual job |
+| `retry_job` | Retry a failed job |
+| `cancel_job` | Cancel a running/pending job |
+| `search_projects` | Search GitLab projects by name or path |
+
+### Resources
+
+| URI | Description |
+|-----|-------------|
+| `gitlab://config` | Current configuration (token excluded) |
+
+### Usage Examples
+
+Once registered, just ask your AI assistant in natural language:
+
+```
+> Show me failed pipelines
+> What's the log of the latest failed job in mygroup/api?
+> Retry that job
+> List all running pipelines on main branch
+```
+
+---
+
 ## Building from Source
 
 Requirements: Go 1.21+
@@ -203,19 +262,21 @@ Requirements: Go 1.21+
 ```bash
 git clone https://github.com/bearlogin/gitlab-awesome-cli.git
 cd gitlab-awesome-cli
-make build
-# binary at dist/glcli
+make build        # TUI binary → dist/glcli
+make build-mcp    # MCP server binary → dist/glcli-mcp
+make build-all    # both
 ```
 
 Other Makefile targets:
 
 ```bash
-make run      # go run
-make test     # run tests
-make lint     # run golangci-lint
-make vet      # go vet
-make install  # install to $GOPATH/bin or /usr/local/bin
-make clean    # remove dist/
+make run          # go run (TUI)
+make test         # run tests
+make lint         # run golangci-lint
+make vet          # go vet
+make install      # install glcli to $GOPATH/bin or /usr/local/bin
+make install-mcp  # install glcli-mcp
+make clean        # remove dist/
 ```
 
 ---
@@ -223,18 +284,22 @@ make clean    # remove dist/
 ## Architecture
 
 ```
-cmd/glcli/              — entry point
+cmd/
+  glcli/                — TUI entry point
+  glcli-mcp/            — MCP server entry point
 internal/
   domain/               — entities, value objects, repository interfaces
   application/service/  — use-case orchestration
   infrastructure/
     gitlab/             — GitLab API client (go-gitlab)
     config/             — YAML config loading + setup wizard
-  presentation/tui/
-    views/              — Projects, Pipelines, Jobs, Log screens
-    components/         — shared widgets (statusbar, breadcrumb, confirm dialog)
-    styles/             — lipgloss theme
-    keymap/             — key normalization incl. Russian layout
+  presentation/
+    tui/                — terminal UI
+      views/            — Projects, Pipelines, Jobs, Log screens
+      components/       — shared widgets (statusbar, breadcrumb, confirm dialog)
+      styles/           — lipgloss theme
+      keymap/           — key normalization incl. Russian layout
+    mcp/                — MCP server (tools, resources, formatters)
 ```
 
 ---

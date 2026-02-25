@@ -1,27 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
-
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/application/service"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
 	gitlabinfra "github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/gitlab"
-	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui"
+	mcpserver "github.com/bearlogin/gitlab-awesome-cli/internal/presentation/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var version = "dev"
+
 func main() {
-	cfgPath := config.DefaultPath()
-	cfg, err := config.Load(cfgPath)
+	cfg, err := config.Load(config.DefaultPath())
 	if err != nil {
-		fmt.Println("No config found. Let's set up glcli!")
-		cfg, err = config.RunSetupWizard()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Setup failed: %v\n", err)
-			os.Exit(1)
-		}
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
 	client, err := gitlabinfra.NewClient(cfg.GitLabURL, cfg.Token)
@@ -37,10 +34,10 @@ func main() {
 	pipelineSvc := service.NewPipelineService(projectRepo, pipelineRepo)
 	jobSvc := service.NewJobService(jobRepo)
 
-	app := tui.NewApp(cfg, pipelineSvc, jobSvc)
-	p := tea.NewProgram(app, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	server := mcpserver.NewServer(cfg, pipelineSvc, jobSvc, version)
+
+	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+		fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -2,6 +2,8 @@ package gitlab
 
 import (
 	"context"
+	"sort"
+	"time"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/valueobject"
@@ -42,4 +44,44 @@ func (r *PipelineRepo) ListJobs(ctx context.Context, projectID, pipelineID int) 
 		}
 	}
 	return result, nil
+}
+
+func (r *PipelineRepo) LoadAllPipelines(ctx context.Context, projectPaths []string, perProject int) ([]entity.Pipeline, error) {
+	var all []entity.Pipeline
+	for _, path := range projectPaths {
+		p, _, err := r.client.Projects.GetProject(path, nil, gogitlab.WithContext(ctx))
+		if err != nil {
+			continue
+		}
+
+		opts := &gogitlab.ListProjectPipelinesOptions{
+			ListOptions: gogitlab.ListOptions{PerPage: perProject},
+			OrderBy:     gogitlab.Ptr("id"),
+			Sort:        gogitlab.Ptr("desc"),
+		}
+		pls, _, err := r.client.Pipelines.ListProjectPipelines(p.ID, opts, gogitlab.WithContext(ctx))
+		if err != nil {
+			continue
+		}
+
+		for _, pl := range pls {
+			createdAt := time.Time{}
+			if pl.CreatedAt != nil {
+				createdAt = *pl.CreatedAt
+			}
+			all = append(all, entity.Pipeline{
+				ID:          pl.ID,
+				ProjectID:   p.ID,
+				ProjectPath: p.PathWithNamespace,
+				Ref:         pl.Ref,
+				Status:      valueobject.PipelineStatus(pl.Status),
+				CreatedAt:   createdAt,
+			})
+		}
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
+	return all, nil
 }

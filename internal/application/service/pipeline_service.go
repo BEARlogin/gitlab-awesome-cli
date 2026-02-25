@@ -5,17 +5,15 @@ import (
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/repository"
-	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/gitlab"
 )
 
 type PipelineService struct {
 	projectRepo  repository.ProjectRepository
 	pipelineRepo repository.PipelineRepository
-	gqlClient    *gitlab.GraphQLClient
 }
 
-func NewPipelineService(pr repository.ProjectRepository, plr repository.PipelineRepository, gql *gitlab.GraphQLClient) *PipelineService {
-	return &PipelineService{projectRepo: pr, pipelineRepo: plr, gqlClient: gql}
+func NewPipelineService(pr repository.ProjectRepository, plr repository.PipelineRepository) *PipelineService {
+	return &PipelineService{projectRepo: pr, pipelineRepo: plr}
 }
 
 func (s *PipelineService) LoadProjects(ctx context.Context, paths []string) ([]entity.Project, error) {
@@ -44,7 +42,7 @@ func (s *PipelineService) ListPipelines(ctx context.Context, projectID int) ([]e
 	return s.projectRepo.ListPipelines(ctx, projectID)
 }
 
-// LoadAllPipelines uses GraphQL to fetch all pipelines in a single request.
+// LoadAllPipelines loads pipelines for all projects via the pipeline repository.
 func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string, limit int) ([]entity.Pipeline, error) {
 	perProject := 20
 	if limit > 0 && len(paths) > 0 {
@@ -57,7 +55,7 @@ func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string, 
 		}
 	}
 
-	all, err := s.gqlClient.LoadAllPipelines(ctx, paths, perProject)
+	all, err := s.pipelineRepo.LoadAllPipelines(ctx, paths, perProject)
 	if err != nil {
 		return nil, err
 	}

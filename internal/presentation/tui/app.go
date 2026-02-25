@@ -226,8 +226,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, a.delegateToView(normalizedMsg)
 	case projectsLoadedMsg:
+		a.err = nil
 		a.projectsView.Projects = msg.projects
 	case allPipelinesLoadedMsg:
+		a.err = nil
 		a.pipelinesView.Limit = a.cfg.PipelineLimit
 		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
