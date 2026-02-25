@@ -26,6 +26,22 @@ builds:
       - -X main.date={{.Date}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+  - id: glcli-mcp
+    main: ./cmd/glcli-mcp/
+    binary: glcli-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
 archives:
   - id: default
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
@@ -74,6 +90,7 @@ release:
     ```bash
     # go install
     go install github.com/bearlogin/gitlab-awesome-cli/cmd/glcli@{{ .Tag }}
+    go install github.com/bearlogin/gitlab-awesome-cli/cmd/glcli-mcp@{{ .Tag }}
 
     # or download a binary above and place it in your PATH
     ```
