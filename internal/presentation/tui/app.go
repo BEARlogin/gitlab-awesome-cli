@@ -424,7 +424,7 @@ func (a App) View() string {
 	case viewPipelines:
 		hints = []components.HotkeyHint{
 			{Key: "↑↓", Desc: "navigate"},
-			{Key: "^d/^u", Desc: "page"},
+			{Key: "fn↑↓", Desc: "page"},
 			{Key: "Enter", Desc: "jobs"},
 			{Key: "/", Desc: "filter"},
 			{Key: "Tab", Desc: "next tab"},
