@@ -33,8 +33,9 @@ func main() {
 	projectRepo := gitlabinfra.NewProjectRepo(client)
 	pipelineRepo := gitlabinfra.NewPipelineRepo(client)
 	jobRepo := gitlabinfra.NewJobRepo(client)
+	gqlClient := gitlabinfra.NewGraphQLClient(cfg.GitLabURL, cfg.Token)
 
-	pipelineSvc := service.NewPipelineService(projectRepo, pipelineRepo)
+	pipelineSvc := service.NewPipelineService(projectRepo, pipelineRepo, gqlClient)
 	jobSvc := service.NewJobService(jobRepo)
 
 	app := tui.NewApp(cfg, pipelineSvc, jobSvc)

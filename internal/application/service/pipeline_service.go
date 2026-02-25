@@ -2,31 +2,38 @@ package service
 
 import (
 	"context"
-	"sort"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/repository"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/gitlab"
 )
 
 type PipelineService struct {
 	projectRepo  repository.ProjectRepository
 	pipelineRepo repository.PipelineRepository
+	gqlClient    *gitlab.GraphQLClient
 }
 
-func NewPipelineService(pr repository.ProjectRepository, plr repository.PipelineRepository) *PipelineService {
-	return &PipelineService{projectRepo: pr, pipelineRepo: plr}
+func NewPipelineService(pr repository.ProjectRepository, plr repository.PipelineRepository, gql *gitlab.GraphQLClient) *PipelineService {
+	return &PipelineService{projectRepo: pr, pipelineRepo: plr, gqlClient: gql}
 }
 
 func (s *PipelineService) LoadProjects(ctx context.Context, paths []string) ([]entity.Project, error) {
 	projects := make([]entity.Project, 0, len(paths))
 	for _, path := range paths {
 		p, err := s.projectRepo.GetByPath(ctx, path)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		pipelines, err := s.projectRepo.ListPipelines(ctx, p.ID)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		p.PipelineCount = len(pipelines)
 		for _, pl := range pipelines {
-			if pl.Status.IsActive() { p.ActiveCount++ }
+			if pl.Status.IsActive() {
+				p.ActiveCount++
+			}
 		}
 		projects = append(projects, *p)
 	}
@@ -37,25 +44,24 @@ func (s *PipelineService) ListPipelines(ctx context.Context, projectID int) ([]e
 	return s.projectRepo.ListPipelines(ctx, projectID)
 }
 
+// LoadAllPipelines uses GraphQL to fetch all pipelines in a single request.
 func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string, limit int) ([]entity.Pipeline, error) {
-	var all []entity.Pipeline
-	for _, path := range paths {
-		p, err := s.projectRepo.GetByPath(ctx, path)
-		if err != nil {
-			return nil, err
+	perProject := 20
+	if limit > 0 && len(paths) > 0 {
+		perProject = limit / len(paths)
+		if perProject < 5 {
+			perProject = 5
 		}
-		pls, err := s.projectRepo.ListPipelines(ctx, p.ID)
-		if err != nil {
-			return nil, err
+		if perProject > 100 {
+			perProject = 100
 		}
-		for i := range pls {
-			pls[i].ProjectPath = p.PathWithNS
-		}
-		all = append(all, pls...)
 	}
-	sort.Slice(all, func(i, j int) bool {
-		return all[i].CreatedAt.After(all[j].CreatedAt)
-	})
+
+	all, err := s.gqlClient.LoadAllPipelines(ctx, paths, perProject)
+	if err != nil {
+		return nil, err
+	}
+
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
 	}
