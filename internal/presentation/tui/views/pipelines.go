@@ -16,13 +16,23 @@ type PipelinesView struct {
 	Pipelines []entity.Pipeline
 	filtered  []entity.Pipeline
 	Cursor    int
+	offset    int
+	height    int // visible rows
 	Filter    string
 	filtering bool
 }
 
-func NewPipelinesView() PipelinesView { return PipelinesView{} }
+func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
 
 type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }
+
+func (v *PipelinesView) SetHeight(h int) {
+	// subtract header lines (filter + padding + statusbar)
+	v.height = h - 6
+	if v.height < 5 {
+		v.height = 5
+	}
+}
 
 func (v *PipelinesView) applyFilter() {
 	if v.Filter == "" {
@@ -40,6 +50,16 @@ func (v *PipelinesView) applyFilter() {
 	}
 	if v.Cursor >= len(v.filtered) {
 		v.Cursor = max(0, len(v.filtered)-1)
+	}
+	v.ensureVisible()
+}
+
+func (v *PipelinesView) ensureVisible() {
+	if v.Cursor < v.offset {
+		v.offset = v.Cursor
+	}
+	if v.Cursor >= v.offset+v.height {
+		v.offset = v.Cursor - v.height + 1
 	}
 }
 
@@ -67,11 +87,31 @@ func (v PipelinesView) Update(msg tea.Msg) (PipelinesView, tea.Cmd) {
 		case "up", "k":
 			if v.Cursor > 0 {
 				v.Cursor--
+				v.ensureVisible()
 			}
 		case "down", "j":
 			if v.Cursor < len(v.filtered)-1 {
 				v.Cursor++
+				v.ensureVisible()
 			}
+		case "home", "g":
+			v.Cursor = 0
+			v.ensureVisible()
+		case "end", "G":
+			v.Cursor = max(0, len(v.filtered)-1)
+			v.ensureVisible()
+		case "pgup":
+			v.Cursor -= v.height
+			if v.Cursor < 0 {
+				v.Cursor = 0
+			}
+			v.ensureVisible()
+		case "pgdown":
+			v.Cursor += v.height
+			if v.Cursor >= len(v.filtered) {
+				v.Cursor = max(0, len(v.filtered)-1)
+			}
+			v.ensureVisible()
 		case "enter":
 			if len(v.filtered) > 0 {
 				return v, func() tea.Msg { return PipelineSelectedMsg{Pipeline: v.filtered[v.Cursor]} }
@@ -127,30 +167,45 @@ func (v PipelinesView) View() string {
 		s += styles.HelpKey.Render("  Filter: ") + styles.HelpDesc.Render(v.Filter) + "\n"
 	}
 	s += "\n"
-	for i, pl := range v.filtered {
+
+	total := len(v.filtered)
+	end := v.offset + v.height
+	if end > total {
+		end = total
+	}
+	visible := v.filtered[v.offset:end]
+
+	for i, pl := range visible {
+		idx := v.offset + i
 		cursor := "  "
-		if i == v.Cursor {
+		if idx == v.Cursor {
 			cursor = "▸ "
 		}
 		st := statusStyle(pl.Status)
 		symbol := st.Render(pl.Status.Symbol())
 		status := st.Render(string(pl.Status))
 
-		// Short project name (last part of path)
 		proj := pl.ProjectPath
-		if idx := strings.LastIndex(proj, "/"); idx >= 0 {
-			proj = proj[idx+1:]
+		if pidx := strings.LastIndex(proj, "/"); pidx >= 0 {
+			proj = proj[pidx+1:]
 		}
 
 		line := fmt.Sprintf("%s%-16s #%-8d %-16s %s %-12s %s",
 			cursor, proj, pl.ID, pl.Ref, symbol, status, timeAgo(pl.CreatedAt))
 		s += line + "\n"
 	}
-	if len(v.filtered) == 0 && len(v.Pipelines) == 0 {
+
+	if total == 0 && len(v.Pipelines) == 0 {
 		s += styles.HelpDesc.Render("  Loading pipelines...") + "\n"
 	}
-	if len(v.filtered) == 0 && len(v.Pipelines) > 0 {
+	if total == 0 && len(v.Pipelines) > 0 {
 		s += styles.HelpDesc.Render("  No pipelines match filter") + "\n"
 	}
+
+	// scroll indicator
+	if total > v.height {
+		s += styles.HelpDesc.Render(fmt.Sprintf("\n  %d/%d", v.Cursor+1, total)) + "\n"
+	}
+
 	return s
 }

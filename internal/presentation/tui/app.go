@@ -178,6 +178,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
+		a.pipelinesView.SetHeight(msg.Height)
+		a.jobsView.SetHeight(msg.Height)
 		a.logView, _ = a.logView.Update(msg)
 	case tea.KeyMsg:
 		switch msg.String() {
