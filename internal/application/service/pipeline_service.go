@@ -54,6 +54,10 @@ func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string) 
 	return all, nil
 }
 
+func (s *PipelineService) SearchProjects(ctx context.Context, query string) ([]entity.Project, error) {
+	return s.projectRepo.Search(ctx, query)
+}
+
 func (s *PipelineService) ListJobs(ctx context.Context, projectID, pipelineID int) ([]entity.Job, error) {
 	return s.pipelineRepo.ListJobs(ctx, projectID, pipelineID)
 }

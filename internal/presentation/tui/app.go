@@ -227,6 +227,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.err = msg.err
 	case tickMsg:
 		return a, tea.Batch(a.refreshCurrentView(), a.tick())
+	case views.ProjectSearchMsg:
+		return a, func() tea.Msg {
+			results, err := a.pipelineSvc.SearchProjects(context.Background(), msg.Query)
+			if err != nil {
+				return errMsg{err}
+			}
+			return views.ProjectSearchResultMsg{Projects: results}
+		}
+	case views.ProjectSearchResultMsg:
+		a.projectsView, _ = a.projectsView.Update(msg)
+		return a, nil
 	case views.ProjectAddMsg:
 		a.cfg.Projects = append(a.cfg.Projects, msg.Path)
 		_ = a.cfg.Save(config.DefaultPath())

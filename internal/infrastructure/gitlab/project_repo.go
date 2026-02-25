@@ -29,6 +29,28 @@ func (r *ProjectRepo) GetByPath(ctx context.Context, pathWithNS string) (*entity
 	}, nil
 }
 
+func (r *ProjectRepo) Search(ctx context.Context, query string) ([]entity.Project, error) {
+	opts := &gogitlab.ListProjectsOptions{
+		ListOptions: gogitlab.ListOptions{PerPage: 10},
+		Search:      gogitlab.Ptr(query),
+		OrderBy:     gogitlab.Ptr("name"),
+	}
+	projects, _, err := r.client.Projects.ListProjects(opts, gogitlab.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]entity.Project, len(projects))
+	for i, p := range projects {
+		result[i] = entity.Project{
+			ID:         p.ID,
+			Name:       p.Name,
+			PathWithNS: p.PathWithNamespace,
+			WebURL:     p.WebURL,
+		}
+	}
+	return result, nil
+}
+
 func (r *ProjectRepo) ListPipelines(ctx context.Context, projectID int) ([]entity.Pipeline, error) {
 	opts := &gogitlab.ListProjectPipelinesOptions{
 		ListOptions: gogitlab.ListOptions{PerPage: 20},
