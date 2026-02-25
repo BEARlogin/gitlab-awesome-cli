@@ -185,6 +185,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "esc":
 			return a, a.goBack()
+		case "tab":
+			return a, a.nextView()
+		case "shift+tab":
+			return a, a.prevView()
 		case "1":
 			a.currentView = viewProjects
 			a.breadcrumb.Parts = nil
@@ -288,6 +292,54 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 		a.logView, cmd = a.logView.Update(msg)
 	}
 	return cmd
+}
+
+func (a *App) maxView() viewID {
+	if a.selectedPipeline != nil {
+		return viewLog
+	}
+	return viewPipelines
+}
+
+func (a *App) nextView() tea.Cmd {
+	next := a.currentView + 1
+	if next > a.maxView() {
+		next = viewProjects
+	}
+	return a.switchToView(next)
+}
+
+func (a *App) prevView() tea.Cmd {
+	if a.currentView == viewProjects {
+		return a.switchToView(a.maxView())
+	}
+	return a.switchToView(a.currentView - 1)
+}
+
+func (a *App) switchToView(v viewID) tea.Cmd {
+	a.currentView = v
+	switch v {
+	case viewProjects:
+		a.breadcrumb.Parts = nil
+		return a.loadProjects()
+	case viewPipelines:
+		a.breadcrumb.Parts = nil
+		return a.loadAllPipelines()
+	case viewJobs:
+		if a.selectedPipeline != nil {
+			a.breadcrumb.Parts = []string{
+				a.selectedPipeline.ProjectPath,
+				fmt.Sprintf("#%d", a.selectedPipeline.ID),
+			}
+			return a.loadJobs(a.selectedPipeline.ProjectID, a.selectedPipeline.ID)
+		}
+		a.currentView = viewPipelines
+		return nil
+	case viewLog:
+		// only reachable if already viewing a log
+		return nil
+	}
+	return nil
 }
 
 func (a *App) goBack() tea.Cmd {
