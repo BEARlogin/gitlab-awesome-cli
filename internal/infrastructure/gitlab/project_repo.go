@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"log"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/valueobject"
@@ -17,8 +18,10 @@ func NewProjectRepo(client *gogitlab.Client) *ProjectRepo {
 }
 
 func (r *ProjectRepo) GetByPath(ctx context.Context, pathWithNS string) (*entity.Project, error) {
+	log.Printf("[gitlab] GetByPath: %s", pathWithNS)
 	p, _, err := r.client.Projects.GetProject(pathWithNS, nil, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] GetByPath: error: %v", err)
 		return nil, err
 	}
 	return &entity.Project{
@@ -30,6 +33,7 @@ func (r *ProjectRepo) GetByPath(ctx context.Context, pathWithNS string) (*entity
 }
 
 func (r *ProjectRepo) Search(ctx context.Context, query string) ([]entity.Project, error) {
+	log.Printf("[gitlab] Search: query=%q", query)
 	opts := &gogitlab.ListProjectsOptions{
 		ListOptions: gogitlab.ListOptions{PerPage: 10},
 		Search:      gogitlab.Ptr(query),
@@ -37,8 +41,10 @@ func (r *ProjectRepo) Search(ctx context.Context, query string) ([]entity.Projec
 	}
 	projects, _, err := r.client.Projects.ListProjects(opts, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] Search: error: %v", err)
 		return nil, err
 	}
+	log.Printf("[gitlab] Search: found %d projects", len(projects))
 	result := make([]entity.Project, len(projects))
 	for i, p := range projects {
 		result[i] = entity.Project{
@@ -52,6 +58,7 @@ func (r *ProjectRepo) Search(ctx context.Context, query string) ([]entity.Projec
 }
 
 func (r *ProjectRepo) ListPipelines(ctx context.Context, projectID int) ([]entity.Pipeline, error) {
+	log.Printf("[gitlab] ListPipelines: project=%d", projectID)
 	opts := &gogitlab.ListProjectPipelinesOptions{
 		ListOptions: gogitlab.ListOptions{PerPage: 20},
 		OrderBy:     gogitlab.Ptr("id"),
@@ -59,8 +66,10 @@ func (r *ProjectRepo) ListPipelines(ctx context.Context, projectID int) ([]entit
 	}
 	pls, _, err := r.client.Pipelines.ListProjectPipelines(projectID, opts, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] ListPipelines: error: %v", err)
 		return nil, err
 	}
+	log.Printf("[gitlab] ListPipelines: project=%d got %d pipelines", projectID, len(pls))
 	result := make([]entity.Pipeline, len(pls))
 	for i, pl := range pls {
 		result[i] = entity.Pipeline{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/application/service"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
@@ -39,10 +40,13 @@ type SearchProjectsInput struct {
 
 func listProjectsHandler(cfg *config.Config, pSvc *service.PipelineService) func(context.Context, *mcp.CallToolRequest, ListProjectsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, _ ListProjectsInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_projects: paths=%v", cfg.Projects)
 		projects, err := pSvc.LoadProjects(ctx, cfg.Projects)
 		if err != nil {
+			log.Printf("[tool] list_projects: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] list_projects: ok, %d projects", len(projects))
 		return textResult(formatProjects(projects)), nil, nil
 	}
 }
@@ -57,9 +61,11 @@ func listPipelinesHandler(cfg *config.Config, pSvc *service.PipelineService) fun
 		if input.Limit > 0 {
 			limit = input.Limit
 		}
+		log.Printf("[tool] list_pipelines: paths=%v status=%q ref=%q limit=%d", paths, input.Status, input.Ref, limit)
 
 		pipelines, err := pSvc.LoadAllPipelines(ctx, paths, limit)
 		if err != nil {
+			log.Printf("[tool] list_pipelines: error: %v", err)
 			return errResult(err), nil, nil
 		}
 
@@ -78,76 +84,97 @@ func listPipelinesHandler(cfg *config.Config, pSvc *service.PipelineService) fun
 			pipelines = filtered
 		}
 
+		log.Printf("[tool] list_pipelines: ok, %d pipelines", len(pipelines))
 		return textResult(formatPipelines(pipelines)), nil, nil
 	}
 }
 
 func listJobsHandler(pSvc *service.PipelineService) func(context.Context, *mcp.CallToolRequest, ListJobsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input ListJobsInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_jobs: project=%d pipeline=%d", input.ProjectID, input.PipelineID)
 		jobs, err := pSvc.ListJobs(ctx, input.ProjectID, input.PipelineID)
 		if err != nil {
+			log.Printf("[tool] list_jobs: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] list_jobs: ok, %d jobs", len(jobs))
 		return textResult(formatJobs(jobs)), nil, nil
 	}
 }
 
 func getJobLogHandler(jSvc *service.JobService) func(context.Context, *mcp.CallToolRequest, JobActionInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input JobActionInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] get_job_log: project=%d job=%d", input.ProjectID, input.JobID)
 		rc, err := jSvc.GetJobLog(ctx, input.ProjectID, input.JobID)
 		if err != nil {
+			log.Printf("[tool] get_job_log: error: %v", err)
 			return errResult(err), nil, nil
 		}
 		defer rc.Close()
 		data, err := io.ReadAll(rc)
 		if err != nil {
+			log.Printf("[tool] get_job_log: read error: %v", err)
 			return errResult(err), nil, nil
 		}
-		log := string(data)
+		jobLog := string(data)
 		const maxLen = 50000
-		if len(log) > maxLen {
-			log = "... (truncated)\n" + log[len(log)-maxLen:]
+		if len(jobLog) > maxLen {
+			log.Printf("[tool] get_job_log: truncating %d -> %d bytes", len(jobLog), maxLen)
+			jobLog = "... (truncated)\n" + jobLog[len(jobLog)-maxLen:]
 		}
-		return textResult(log), nil, nil
+		log.Printf("[tool] get_job_log: ok, %d bytes", len(jobLog))
+		return textResult(jobLog), nil, nil
 	}
 }
 
 func playJobHandler(jSvc *service.JobService) func(context.Context, *mcp.CallToolRequest, JobActionInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input JobActionInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] play_job: project=%d job=%d", input.ProjectID, input.JobID)
 		job, err := jSvc.PlayJob(ctx, input.ProjectID, input.JobID)
 		if err != nil {
+			log.Printf("[tool] play_job: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] play_job: ok, status=%s", job.Status)
 		return textResult(fmt.Sprintf("Job started: %s", formatJob(*job))), nil, nil
 	}
 }
 
 func retryJobHandler(jSvc *service.JobService) func(context.Context, *mcp.CallToolRequest, JobActionInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input JobActionInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] retry_job: project=%d job=%d", input.ProjectID, input.JobID)
 		job, err := jSvc.RetryJob(ctx, input.ProjectID, input.JobID)
 		if err != nil {
+			log.Printf("[tool] retry_job: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] retry_job: ok, status=%s", job.Status)
 		return textResult(fmt.Sprintf("Job retried: %s", formatJob(*job))), nil, nil
 	}
 }
 
 func cancelJobHandler(jSvc *service.JobService) func(context.Context, *mcp.CallToolRequest, JobActionInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input JobActionInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] cancel_job: project=%d job=%d", input.ProjectID, input.JobID)
 		job, err := jSvc.CancelJob(ctx, input.ProjectID, input.JobID)
 		if err != nil {
+			log.Printf("[tool] cancel_job: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] cancel_job: ok, status=%s", job.Status)
 		return textResult(fmt.Sprintf("Job canceled: %s", formatJob(*job))), nil, nil
 	}
 }
 
 func searchProjectsHandler(pSvc *service.PipelineService) func(context.Context, *mcp.CallToolRequest, SearchProjectsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input SearchProjectsInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] search_projects: query=%q", input.Query)
 		projects, err := pSvc.SearchProjects(ctx, input.Query)
 		if err != nil {
+			log.Printf("[tool] search_projects: error: %v", err)
 			return errResult(err), nil, nil
 		}
+		log.Printf("[tool] search_projects: ok, %d results", len(projects))
 		return textResult(formatProjects(projects)), nil, nil
 	}
 }

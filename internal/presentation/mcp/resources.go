@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
@@ -11,6 +12,7 @@ import (
 
 func configResourceHandler(cfg *config.Config) func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 	return func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		log.Print("[resource] gitlab://config: read")
 		var b strings.Builder
 		fmt.Fprintf(&b, "GitLab URL: %s\n", cfg.GitLabURL)
 		fmt.Fprintf(&b, "Projects: %s\n", strings.Join(cfg.Projects, ", "))

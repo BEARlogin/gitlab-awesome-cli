@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,6 +15,9 @@ import (
 )
 
 func main() {
+	// Silence log output in TUI mode — infrastructure uses log.Printf
+	log.SetOutput(io.Discard)
+
 	cfgPath := config.DefaultPath()
 	cfg, err := config.Load(cfgPath)
 	if err != nil {

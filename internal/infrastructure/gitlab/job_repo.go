@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/valueobject"
@@ -19,32 +20,43 @@ func NewJobRepo(client *gogitlab.Client) *JobRepo {
 }
 
 func (r *JobRepo) Play(ctx context.Context, projectID, jobID int) (*entity.Job, error) {
+	log.Printf("[gitlab] PlayJob: project=%d job=%d", projectID, jobID)
 	j, _, err := r.client.Jobs.PlayJob(projectID, jobID, nil, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] PlayJob: error: %v", err)
 		return nil, err
 	}
+	log.Printf("[gitlab] PlayJob: ok, status=%s", j.Status)
 	return mapJob(j, projectID), nil
 }
 
 func (r *JobRepo) Retry(ctx context.Context, projectID, jobID int) (*entity.Job, error) {
+	log.Printf("[gitlab] RetryJob: project=%d job=%d", projectID, jobID)
 	j, _, err := r.client.Jobs.RetryJob(projectID, jobID, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] RetryJob: error: %v", err)
 		return nil, err
 	}
+	log.Printf("[gitlab] RetryJob: ok, status=%s", j.Status)
 	return mapJob(j, projectID), nil
 }
 
 func (r *JobRepo) Cancel(ctx context.Context, projectID, jobID int) (*entity.Job, error) {
+	log.Printf("[gitlab] CancelJob: project=%d job=%d", projectID, jobID)
 	j, _, err := r.client.Jobs.CancelJob(projectID, jobID, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] CancelJob: error: %v", err)
 		return nil, err
 	}
+	log.Printf("[gitlab] CancelJob: ok, status=%s", j.Status)
 	return mapJob(j, projectID), nil
 }
 
 func (r *JobRepo) GetLog(ctx context.Context, projectID, jobID int) (io.ReadCloser, error) {
+	log.Printf("[gitlab] GetTraceFile: project=%d job=%d", projectID, jobID)
 	trace, _, err := r.client.Jobs.GetTraceFile(projectID, jobID, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] GetTraceFile: error: %v", err)
 		return nil, err
 	}
 	data, err := io.ReadAll(trace)

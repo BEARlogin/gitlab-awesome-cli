@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"log"
 	"sort"
 	"time"
 
@@ -19,14 +20,20 @@ func NewPipelineRepo(client *gogitlab.Client) *PipelineRepo {
 }
 
 func (r *PipelineRepo) ListJobs(ctx context.Context, projectID, pipelineID int) ([]entity.Job, error) {
+	log.Printf("[gitlab] ListJobs: project=%d pipeline=%d", projectID, pipelineID)
 	opts := &gogitlab.ListJobsOptions{ListOptions: gogitlab.ListOptions{PerPage: 100}}
+
+	// Regular jobs
 	jobs, _, err := r.client.Jobs.ListPipelineJobs(projectID, pipelineID, opts, gogitlab.WithContext(ctx))
 	if err != nil {
+		log.Printf("[gitlab] ListJobs: error: %v", err)
 		return nil, err
 	}
-	result := make([]entity.Job, len(jobs))
-	for i, j := range jobs {
-		result[i] = entity.Job{
+	log.Printf("[gitlab] ListJobs: got %d regular jobs", len(jobs))
+
+	result := make([]entity.Job, 0, len(jobs))
+	for _, j := range jobs {
+		job := entity.Job{
 			ID:         j.ID,
 			PipelineID: pipelineID,
 			ProjectID:  projectID,
@@ -37,20 +44,52 @@ func (r *PipelineRepo) ListJobs(ctx context.Context, projectID, pipelineID int) 
 			WebURL:     j.WebURL,
 		}
 		if j.StartedAt != nil {
-			result[i].StartedAt = j.StartedAt
+			job.StartedAt = j.StartedAt
 		}
 		if j.FinishedAt != nil {
-			result[i].FinishedAt = j.FinishedAt
+			job.FinishedAt = j.FinishedAt
+		}
+		result = append(result, job)
+	}
+
+	// Bridge/trigger jobs
+	bridges, _, err := r.client.Jobs.ListPipelineBridges(projectID, pipelineID, opts, gogitlab.WithContext(ctx))
+	if err != nil {
+		log.Printf("[gitlab] ListJobs: bridges error (non-fatal): %v", err)
+	} else {
+		log.Printf("[gitlab] ListJobs: got %d bridge jobs", len(bridges))
+		for _, b := range bridges {
+			job := entity.Job{
+				ID:         b.ID,
+				PipelineID: pipelineID,
+				ProjectID:  projectID,
+				Name:       b.Name,
+				Stage:      b.Stage,
+				Status:     valueobject.JobStatus(b.Status),
+				Duration:   b.Duration,
+				WebURL:     b.WebURL,
+			}
+			if b.StartedAt != nil {
+				job.StartedAt = b.StartedAt
+			}
+			if b.FinishedAt != nil {
+				job.FinishedAt = b.FinishedAt
+			}
+			result = append(result, job)
 		}
 	}
+
+	log.Printf("[gitlab] ListJobs: total %d jobs", len(result))
 	return result, nil
 }
 
 func (r *PipelineRepo) LoadAllPipelines(ctx context.Context, projectPaths []string, perProject int) ([]entity.Pipeline, error) {
+	log.Printf("[gitlab] LoadAllPipelines: paths=%v perProject=%d", projectPaths, perProject)
 	var all []entity.Pipeline
 	for _, path := range projectPaths {
 		p, _, err := r.client.Projects.GetProject(path, nil, gogitlab.WithContext(ctx))
 		if err != nil {
+			log.Printf("[gitlab] LoadAllPipelines: skip %s: %v", path, err)
 			continue
 		}
 
@@ -61,8 +100,10 @@ func (r *PipelineRepo) LoadAllPipelines(ctx context.Context, projectPaths []stri
 		}
 		pls, _, err := r.client.Pipelines.ListProjectPipelines(p.ID, opts, gogitlab.WithContext(ctx))
 		if err != nil {
+			log.Printf("[gitlab] LoadAllPipelines: skip pipelines for %s: %v", path, err)
 			continue
 		}
+		log.Printf("[gitlab] LoadAllPipelines: %s got %d pipelines", path, len(pls))
 
 		for _, pl := range pls {
 			createdAt := time.Time{}
