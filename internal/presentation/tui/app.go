@@ -1,0 +1,342 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/application/service"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/components"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/styles"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/presentation/tui/views"
+)
+
+type viewID int
+
+const (
+	viewProjects viewID = iota
+	viewPipelines
+	viewJobs
+	viewLog
+)
+
+type App struct {
+	cfg              *config.Config
+	pipelineSvc      *service.PipelineService
+	jobSvc           *service.JobService
+	currentView      viewID
+	breadcrumb       components.Breadcrumb
+	projectsView     views.ProjectsView
+	pipelinesView    views.PipelinesView
+	jobsView         views.JobsView
+	logView          views.LogView
+	confirmDialog    *components.ConfirmDialog
+	selectedProject  *entity.Project
+	selectedPipeline *entity.Pipeline
+	width            int
+	height           int
+	err              error
+}
+
+func NewApp(cfg *config.Config, ps *service.PipelineService, js *service.JobService) App {
+	return App{
+		cfg:           cfg,
+		pipelineSvc:   ps,
+		jobSvc:        js,
+		currentView:   viewProjects,
+		breadcrumb:    components.NewBreadcrumb(),
+		projectsView:  views.NewProjectsView(),
+		pipelinesView: views.NewPipelinesView(),
+		jobsView:      views.NewJobsView(),
+		logView:       views.NewLogView(),
+	}
+}
+
+type projectsLoadedMsg struct{ projects []entity.Project }
+type pipelinesLoadedMsg struct{ pipelines []entity.Pipeline }
+type jobsLoadedMsg struct{ jobs []entity.Job }
+type logLoadedMsg struct {
+	content string
+	jobName string
+}
+type jobActionDoneMsg struct {
+	job *entity.Job
+	err error
+}
+type errMsg struct{ err error }
+type tickMsg time.Time
+
+func (a App) Init() tea.Cmd {
+	return tea.Batch(a.loadProjects(), a.tick())
+}
+
+func (a App) tick() tea.Cmd {
+	return tea.Tick(a.cfg.RefreshInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+func (a App) loadProjects() tea.Cmd {
+	return func() tea.Msg {
+		projects, err := a.pipelineSvc.LoadProjects(context.Background(), a.cfg.Projects)
+		if err != nil {
+			return errMsg{err}
+		}
+		return projectsLoadedMsg{projects}
+	}
+}
+
+func (a App) loadPipelines(projectID int) tea.Cmd {
+	return func() tea.Msg {
+		pls, err := a.pipelineSvc.ListPipelines(context.Background(), projectID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return pipelinesLoadedMsg{pls}
+	}
+}
+
+func (a App) loadJobs(projectID, pipelineID int) tea.Cmd {
+	return func() tea.Msg {
+		jobs, err := a.pipelineSvc.ListJobs(context.Background(), projectID, pipelineID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return jobsLoadedMsg{jobs}
+	}
+}
+
+func (a App) loadLog(projectID, jobID int, jobName string) tea.Cmd {
+	return func() tea.Msg {
+		rc, err := a.jobSvc.GetJobLog(context.Background(), projectID, jobID)
+		if err != nil {
+			return errMsg{err}
+		}
+		defer rc.Close()
+		data, err := io.ReadAll(rc)
+		if err != nil {
+			return errMsg{err}
+		}
+		return logLoadedMsg{
+			content: string(data),
+			jobName: jobName,
+		}
+	}
+}
+
+func (a App) doJobAction(action string, projectID, jobID int) tea.Cmd {
+	return func() tea.Msg {
+		var job *entity.Job
+		var err error
+		ctx := context.Background()
+		switch action {
+		case "play":
+			job, err = a.jobSvc.PlayJob(ctx, projectID, jobID)
+		case "retry":
+			job, err = a.jobSvc.RetryJob(ctx, projectID, jobID)
+		case "cancel":
+			job, err = a.jobSvc.CancelJob(ctx, projectID, jobID)
+		}
+		return jobActionDoneMsg{
+			job: job,
+			err: err,
+		}
+	}
+}
+
+func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.confirmDialog != nil {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			d, result := a.confirmDialog.Update(keyMsg)
+			a.confirmDialog = &d
+			if result != nil {
+				a.confirmDialog = nil
+				if result.Confirmed {
+					return a, a.doJobAction(result.Action, result.ProjectID, result.JobID)
+				}
+				return a, nil
+			}
+			return a, nil
+		}
+	}
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.width = msg.Width
+		a.height = msg.Height
+		a.logView, _ = a.logView.Update(msg)
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return a, tea.Quit
+		case "esc":
+			return a, a.goBack()
+		case "1":
+			a.currentView = viewProjects
+			a.breadcrumb.Parts = nil
+			return a, a.loadProjects()
+		case "2":
+			if a.selectedProject != nil {
+				a.currentView = viewPipelines
+				a.breadcrumb.Parts = []string{a.selectedProject.PathWithNS}
+				return a, a.loadPipelines(a.selectedProject.ID)
+			}
+		case "3":
+			if a.selectedPipeline != nil {
+				a.currentView = viewJobs
+				return a, nil
+			}
+		}
+		return a, a.delegateToView(msg)
+	case projectsLoadedMsg:
+		a.projectsView.Projects = msg.projects
+	case pipelinesLoadedMsg:
+		a.pipelinesView.Pipelines = msg.pipelines
+	case jobsLoadedMsg:
+		a.jobsView.Jobs = msg.jobs
+	case logLoadedMsg:
+		a.logView, _ = a.logView.Update(views.LogContentMsg{
+			Content: msg.content,
+			JobName: msg.jobName,
+		})
+	case jobActionDoneMsg:
+		if msg.err != nil {
+			a.err = msg.err
+		} else if a.selectedPipeline != nil {
+			return a, a.loadJobs(a.selectedProject.ID, a.selectedPipeline.ID)
+		}
+	case errMsg:
+		a.err = msg.err
+	case tickMsg:
+		return a, tea.Batch(a.refreshCurrentView(), a.tick())
+	case views.ProjectSelectedMsg:
+		a.selectedProject = &msg.Project
+		a.currentView = viewPipelines
+		a.breadcrumb.Parts = []string{msg.Project.PathWithNS}
+		return a, a.loadPipelines(msg.Project.ID)
+	case views.PipelineSelectedMsg:
+		a.selectedPipeline = &msg.Pipeline
+		a.currentView = viewJobs
+		a.breadcrumb.Parts = []string{
+			a.selectedProject.PathWithNS,
+			fmt.Sprintf("#%d", msg.Pipeline.ID),
+		}
+		return a, a.loadJobs(a.selectedProject.ID, msg.Pipeline.ID)
+	case views.JobSelectedMsg:
+		a.currentView = viewLog
+		a.breadcrumb.Parts = []string{
+			a.selectedProject.PathWithNS,
+			fmt.Sprintf("#%d", a.selectedPipeline.ID),
+			msg.Job.Name,
+		}
+		return a, a.loadLog(msg.Job.ProjectID, msg.Job.ID, msg.Job.Name)
+	case views.JobActionMsg:
+		actionLabel := map[string]string{
+			"play":   "Run",
+			"retry":  "Retry",
+			"cancel": "Cancel",
+		}
+		confirm := components.NewConfirmDialog(
+			fmt.Sprintf("%s job \"%s\"?", actionLabel[msg.Action], msg.Job.Name),
+			msg.Action,
+			msg.Job.ProjectID,
+			msg.Job.ID,
+		)
+		a.confirmDialog = &confirm
+	}
+	return a, nil
+}
+
+func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	switch a.currentView {
+	case viewProjects:
+		a.projectsView, cmd = a.projectsView.Update(msg)
+	case viewPipelines:
+		a.pipelinesView, cmd = a.pipelinesView.Update(msg)
+	case viewJobs:
+		a.jobsView, cmd = a.jobsView.Update(msg)
+	case viewLog:
+		a.logView, cmd = a.logView.Update(msg)
+	}
+	return cmd
+}
+
+func (a *App) goBack() tea.Cmd {
+	switch a.currentView {
+	case viewPipelines:
+		a.currentView = viewProjects
+		a.breadcrumb.Parts = nil
+		return a.loadProjects()
+	case viewJobs:
+		a.currentView = viewPipelines
+		a.breadcrumb.Parts = []string{a.selectedProject.PathWithNS}
+	case viewLog:
+		a.currentView = viewJobs
+		a.breadcrumb.Parts = []string{
+			a.selectedProject.PathWithNS,
+			fmt.Sprintf("#%d", a.selectedPipeline.ID),
+		}
+	}
+	return nil
+}
+
+func (a App) refreshCurrentView() tea.Cmd {
+	switch a.currentView {
+	case viewProjects:
+		return a.loadProjects()
+	case viewPipelines:
+		if a.selectedProject != nil {
+			return a.loadPipelines(a.selectedProject.ID)
+		}
+	case viewJobs:
+		if a.selectedProject != nil && a.selectedPipeline != nil {
+			return a.loadJobs(a.selectedProject.ID, a.selectedPipeline.ID)
+		}
+	}
+	return nil
+}
+
+func (a App) View() string {
+	tabs := ""
+	viewNames := []string{"Projects", "Pipelines", "Jobs", "Log"}
+	for i, name := range viewNames {
+		label := fmt.Sprintf(" %d:%s ", i+1, name)
+		if viewID(i) == a.currentView {
+			tabs += styles.ActiveTab.Render(label)
+		} else {
+			tabs += styles.InactiveTab.Render(label)
+		}
+	}
+	bc := a.breadcrumb.View()
+	errStr := ""
+	if a.err != nil {
+		errStr = styles.StatusFailed.Render(fmt.Sprintf("  Error: %v", a.err)) + "\n"
+	}
+	var content string
+	switch a.currentView {
+	case viewProjects:
+		content = a.projectsView.View()
+	case viewPipelines:
+		content = a.pipelinesView.View()
+	case viewJobs:
+		content = a.jobsView.View()
+	case viewLog:
+		content = a.logView.View()
+	}
+	if a.confirmDialog != nil {
+		content += "\n" + a.confirmDialog.View()
+	}
+	hints := []components.HotkeyHint{
+		{Key: "↑↓", Desc: "navigate"},
+		{Key: "Enter", Desc: "select"},
+		{Key: "Esc", Desc: "back"},
+		{Key: "r", Desc: "run/retry"},
+		{Key: "c", Desc: "cancel"},
+		{Key: "q", Desc: "quit"},
+	}
+	sb := components.NewStatusBar(hints)
+	return tabs + "\n" + bc + "\n" + errStr + content + "\n" + sb.View() + "\n"
+}
