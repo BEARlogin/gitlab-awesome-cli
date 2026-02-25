@@ -2,7 +2,9 @@ package views
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/valueobject"
@@ -12,63 +14,143 @@ import (
 
 type PipelinesView struct {
 	Pipelines []entity.Pipeline
+	filtered  []entity.Pipeline
 	Cursor    int
+	Filter    string
+	filtering bool
 }
 
 func NewPipelinesView() PipelinesView { return PipelinesView{} }
 
 type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }
 
+func (v *PipelinesView) applyFilter() {
+	if v.Filter == "" {
+		v.filtered = v.Pipelines
+		return
+	}
+	f := strings.ToLower(v.Filter)
+	v.filtered = nil
+	for _, pl := range v.Pipelines {
+		if strings.Contains(strings.ToLower(pl.ProjectPath), f) ||
+			strings.Contains(strings.ToLower(pl.Ref), f) ||
+			strings.Contains(strings.ToLower(string(pl.Status)), f) {
+			v.filtered = append(v.filtered, pl)
+		}
+	}
+	if v.Cursor >= len(v.filtered) {
+		v.Cursor = max(0, len(v.filtered)-1)
+	}
+}
+
 func (v PipelinesView) Update(msg tea.Msg) (PipelinesView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if v.filtering {
+			switch msg.String() {
+			case "enter", "esc":
+				v.filtering = false
+			case "backspace":
+				if len(v.Filter) > 0 {
+					v.Filter = v.Filter[:len(v.Filter)-1]
+					v.applyFilter()
+				}
+			default:
+				if len(msg.String()) == 1 {
+					v.Filter += msg.String()
+					v.applyFilter()
+				}
+			}
+			return v, nil
+		}
 		switch msg.String() {
 		case "up", "k":
-			if v.Cursor > 0 { v.Cursor-- }
-		case "down", "j":
-			if v.Cursor < len(v.Pipelines)-1 { v.Cursor++ }
-		case "enter":
-			if len(v.Pipelines) > 0 {
-				return v, func() tea.Msg { return PipelineSelectedMsg{Pipeline: v.Pipelines[v.Cursor]} }
+			if v.Cursor > 0 {
+				v.Cursor--
 			}
+		case "down", "j":
+			if v.Cursor < len(v.filtered)-1 {
+				v.Cursor++
+			}
+		case "enter":
+			if len(v.filtered) > 0 {
+				return v, func() tea.Msg { return PipelineSelectedMsg{Pipeline: v.filtered[v.Cursor]} }
+			}
+		case "/":
+			v.filtering = true
+			v.Filter = ""
+			v.applyFilter()
 		}
 	}
 	return v, nil
 }
 
+func (v *PipelinesView) SetPipelines(pls []entity.Pipeline) {
+	v.Pipelines = pls
+	v.applyFilter()
+}
+
 func statusStyle(status valueobject.PipelineStatus) lipgloss.Style {
 	switch status {
-	case valueobject.PipelineSuccess: return styles.StatusSuccess
-	case valueobject.PipelineFailed: return styles.StatusFailed
-	case valueobject.PipelineRunning: return styles.StatusRunning
-	case valueobject.PipelineManual: return styles.StatusManual
-	default: return styles.StatusPending
+	case valueobject.PipelineSuccess:
+		return styles.StatusSuccess
+	case valueobject.PipelineFailed:
+		return styles.StatusFailed
+	case valueobject.PipelineRunning:
+		return styles.StatusRunning
+	case valueobject.PipelineManual:
+		return styles.StatusManual
+	default:
+		return styles.StatusPending
 	}
 }
 
 func timeAgo(t time.Time) string {
 	d := time.Since(t)
 	switch {
-	case d < time.Minute: return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour: return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour: return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default: return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }
 
 func (v PipelinesView) View() string {
-	s := "\n"
-	for i, pl := range v.Pipelines {
+	s := ""
+	if v.filtering {
+		s += styles.HelpKey.Render("  Filter: ") + v.Filter + "█\n"
+	} else if v.Filter != "" {
+		s += styles.HelpKey.Render("  Filter: ") + styles.HelpDesc.Render(v.Filter) + "\n"
+	}
+	s += "\n"
+	for i, pl := range v.filtered {
 		cursor := "  "
-		if i == v.Cursor { cursor = "▸ " }
+		if i == v.Cursor {
+			cursor = "▸ "
+		}
 		st := statusStyle(pl.Status)
 		symbol := st.Render(pl.Status.Symbol())
 		status := st.Render(string(pl.Status))
-		line := fmt.Sprintf("%s#%-8d %-20s %s %-12s %s", cursor, pl.ID, pl.Ref, symbol, status, timeAgo(pl.CreatedAt))
+
+		// Short project name (last part of path)
+		proj := pl.ProjectPath
+		if idx := strings.LastIndex(proj, "/"); idx >= 0 {
+			proj = proj[idx+1:]
+		}
+
+		line := fmt.Sprintf("%s%-16s #%-8d %-16s %s %-12s %s",
+			cursor, proj, pl.ID, pl.Ref, symbol, status, timeAgo(pl.CreatedAt))
 		s += line + "\n"
 	}
-	if len(v.Pipelines) == 0 {
+	if len(v.filtered) == 0 && len(v.Pipelines) == 0 {
 		s += styles.HelpDesc.Render("  Loading pipelines...") + "\n"
+	}
+	if len(v.filtered) == 0 && len(v.Pipelines) > 0 {
+		s += styles.HelpDesc.Render("  No pipelines match filter") + "\n"
 	}
 	return s
 }

@@ -35,6 +35,25 @@ func (s *PipelineService) ListPipelines(ctx context.Context, projectID int) ([]e
 	return s.projectRepo.ListPipelines(ctx, projectID)
 }
 
+func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string) ([]entity.Pipeline, error) {
+	var all []entity.Pipeline
+	for _, path := range paths {
+		p, err := s.projectRepo.GetByPath(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		pls, err := s.projectRepo.ListPipelines(ctx, p.ID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range pls {
+			pls[i].ProjectPath = p.PathWithNS
+		}
+		all = append(all, pls...)
+	}
+	return all, nil
+}
+
 func (s *PipelineService) ListJobs(ctx context.Context, projectID, pipelineID int) ([]entity.Job, error) {
 	return s.pipelineRepo.ListJobs(ctx, projectID, pipelineID)
 }

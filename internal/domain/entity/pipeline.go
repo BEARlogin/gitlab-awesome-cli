@@ -7,11 +7,12 @@ import (
 )
 
 type Pipeline struct {
-	ID        int
-	ProjectID int
-	Ref       string
-	Status    valueobject.PipelineStatus
-	CreatedAt time.Time
-	Duration  int
-	JobCount  int
+	ID          int
+	ProjectID   int
+	ProjectPath string
+	Ref         string
+	Status      valueobject.PipelineStatus
+	CreatedAt   time.Time
+	Duration    int
+	JobCount    int
 }

@@ -47,7 +47,7 @@ func NewApp(cfg *config.Config, ps *service.PipelineService, js *service.JobServ
 		cfg:           cfg,
 		pipelineSvc:   ps,
 		jobSvc:        js,
-		currentView:   viewProjects,
+		currentView:   viewPipelines,
 		breadcrumb:    components.NewBreadcrumb(),
 		projectsView:  views.NewProjectsView(),
 		pipelinesView: views.NewPipelinesView(),
@@ -71,7 +71,7 @@ type errMsg struct{ err error }
 type tickMsg time.Time
 
 func (a App) Init() tea.Cmd {
-	return tea.Batch(a.loadProjects(), a.tick())
+	return tea.Batch(a.loadAllPipelines(), a.tick())
 }
 
 func (a App) tick() tea.Cmd {
@@ -87,6 +87,18 @@ func (a App) loadProjects() tea.Cmd {
 		return projectsLoadedMsg{projects}
 	}
 }
+
+func (a App) loadAllPipelines() tea.Cmd {
+	return func() tea.Msg {
+		pls, err := a.pipelineSvc.LoadAllPipelines(context.Background(), a.cfg.Projects)
+		if err != nil {
+			return errMsg{err}
+		}
+		return allPipelinesLoadedMsg{pls}
+	}
+}
+
+type allPipelinesLoadedMsg struct{ pipelines []entity.Pipeline }
 
 func (a App) loadPipelines(projectID int) tea.Cmd {
 	return func() tea.Msg {
@@ -178,11 +190,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.breadcrumb.Parts = nil
 			return a, a.loadProjects()
 		case "2":
-			if a.selectedProject != nil {
-				a.currentView = viewPipelines
-				a.breadcrumb.Parts = []string{a.selectedProject.PathWithNS}
-				return a, a.loadPipelines(a.selectedProject.ID)
-			}
+			a.currentView = viewPipelines
+			a.breadcrumb.Parts = nil
+			return a, a.loadAllPipelines()
 		case "3":
 			if a.selectedPipeline != nil {
 				a.currentView = viewJobs
@@ -192,6 +202,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.delegateToView(msg)
 	case projectsLoadedMsg:
 		a.projectsView.Projects = msg.projects
+	case allPipelinesLoadedMsg:
+		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
 		a.pipelinesView.Pipelines = msg.pipelines
 	case jobsLoadedMsg:
@@ -205,29 +217,43 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			a.err = msg.err
 		} else if a.selectedPipeline != nil {
-			return a, a.loadJobs(a.selectedProject.ID, a.selectedPipeline.ID)
+			return a, a.loadJobs(a.selectedPipeline.ProjectID, a.selectedPipeline.ID)
 		}
 	case errMsg:
 		a.err = msg.err
 	case tickMsg:
 		return a, tea.Batch(a.refreshCurrentView(), a.tick())
+	case views.ProjectAddMsg:
+		a.cfg.Projects = append(a.cfg.Projects, msg.Path)
+		_ = a.cfg.Save(config.DefaultPath())
+		return a, a.loadProjects()
+	case views.ProjectDeleteMsg:
+		newProjects := make([]string, 0, len(a.cfg.Projects))
+		for _, p := range a.cfg.Projects {
+			if p != msg.Path {
+				newProjects = append(newProjects, p)
+			}
+		}
+		a.cfg.Projects = newProjects
+		_ = a.cfg.Save(config.DefaultPath())
+		return a, a.loadProjects()
 	case views.ProjectSelectedMsg:
 		a.selectedProject = &msg.Project
 		a.currentView = viewPipelines
 		a.breadcrumb.Parts = []string{msg.Project.PathWithNS}
-		return a, a.loadPipelines(msg.Project.ID)
+		return a, a.loadAllPipelines()
 	case views.PipelineSelectedMsg:
 		a.selectedPipeline = &msg.Pipeline
 		a.currentView = viewJobs
 		a.breadcrumb.Parts = []string{
-			a.selectedProject.PathWithNS,
+			msg.Pipeline.ProjectPath,
 			fmt.Sprintf("#%d", msg.Pipeline.ID),
 		}
-		return a, a.loadJobs(a.selectedProject.ID, msg.Pipeline.ID)
+		return a, a.loadJobs(msg.Pipeline.ProjectID, msg.Pipeline.ID)
 	case views.JobSelectedMsg:
 		a.currentView = viewLog
 		a.breadcrumb.Parts = []string{
-			a.selectedProject.PathWithNS,
+			a.selectedPipeline.ProjectPath,
 			fmt.Sprintf("#%d", a.selectedPipeline.ID),
 			msg.Job.Name,
 		}
@@ -272,11 +298,11 @@ func (a *App) goBack() tea.Cmd {
 		return a.loadProjects()
 	case viewJobs:
 		a.currentView = viewPipelines
-		a.breadcrumb.Parts = []string{a.selectedProject.PathWithNS}
+		a.breadcrumb.Parts = nil
 	case viewLog:
 		a.currentView = viewJobs
 		a.breadcrumb.Parts = []string{
-			a.selectedProject.PathWithNS,
+			a.selectedPipeline.ProjectPath,
 			fmt.Sprintf("#%d", a.selectedPipeline.ID),
 		}
 	}
@@ -288,9 +314,7 @@ func (a App) refreshCurrentView() tea.Cmd {
 	case viewProjects:
 		return a.loadProjects()
 	case viewPipelines:
-		if a.selectedProject != nil {
-			return a.loadPipelines(a.selectedProject.ID)
-		}
+		return a.loadAllPipelines()
 	case viewJobs:
 		if a.selectedProject != nil && a.selectedPipeline != nil {
 			return a.loadJobs(a.selectedProject.ID, a.selectedPipeline.ID)
