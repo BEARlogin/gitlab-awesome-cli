@@ -185,6 +185,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.logView, _ = a.logView.Update(msg)
 	case tea.KeyMsg:
 		key := keymap.Normalize(msg.String())
+
+		// If a view is in input mode (filter, add project), delegate directly
+		if a.isViewInputMode() {
+			normalizedMsg := tea.KeyMsg(tea.Key{Type: msg.Type, Runes: []rune(key)})
+			if key != msg.String() {
+				// Don't normalize in input mode — let actual characters through
+				return a, a.delegateToView(msg)
+			}
+			return a, a.delegateToView(normalizedMsg)
+		}
+
 		switch key {
 		case "ctrl+c", "q":
 			return a, tea.Quit
@@ -315,6 +326,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.confirmDialog = &confirm
 	}
 	return a, nil
+}
+
+func (a *App) isViewInputMode() bool {
+	switch a.currentView {
+	case viewProjects:
+		return a.projectsView.IsInputMode()
+	case viewPipelines:
+		return a.pipelinesView.IsInputMode()
+	}
+	return false
 }
 
 func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {

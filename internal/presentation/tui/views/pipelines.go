@@ -25,6 +25,8 @@ type PipelinesView struct {
 
 func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
 
+func (v PipelinesView) IsInputMode() bool { return v.filtering }
+
 type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }
 type PipelineLimitCycleMsg struct{}
 

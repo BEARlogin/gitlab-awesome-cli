@@ -19,6 +19,8 @@ type ProjectsView struct {
 
 func NewProjectsView() ProjectsView { return ProjectsView{} }
 
+func (v ProjectsView) IsInputMode() bool { return v.adding }
+
 type ProjectSelectedMsg struct{ Project entity.Project }
 type ProjectAddMsg struct{ Path string }
 type ProjectDeleteMsg struct{ Path string }
