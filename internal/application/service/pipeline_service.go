@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"sort"
+
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/repository"
 )
@@ -51,6 +53,9 @@ func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string) 
 		}
 		all = append(all, pls...)
 	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
 	return all, nil
 }
 
