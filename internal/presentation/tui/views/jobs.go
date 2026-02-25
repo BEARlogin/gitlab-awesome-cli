@@ -61,14 +61,14 @@ func (v JobsView) Update(msg tea.Msg) (JobsView, tea.Cmd) {
 		case "end", "G":
 			v.Cursor = max(0, len(v.Jobs)-1)
 			v.ensureVisible()
-		case "pgup":
-			v.Cursor -= v.height
+		case "pgup", "ctrl+u":
+			v.Cursor -= v.height / 2
 			if v.Cursor < 0 {
 				v.Cursor = 0
 			}
 			v.ensureVisible()
-		case "pgdown":
-			v.Cursor += v.height
+		case "pgdown", "ctrl+d":
+			v.Cursor += v.height / 2
 			if v.Cursor >= len(v.Jobs) {
 				v.Cursor = max(0, len(v.Jobs)-1)
 			}
