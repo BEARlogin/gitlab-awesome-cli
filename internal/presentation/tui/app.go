@@ -91,7 +91,7 @@ func (a App) loadProjects() tea.Cmd {
 
 func (a App) loadAllPipelines() tea.Cmd {
 	return func() tea.Msg {
-		pls, err := a.pipelineSvc.LoadAllPipelines(context.Background(), a.cfg.Projects)
+		pls, err := a.pipelineSvc.LoadAllPipelines(context.Background(), a.cfg.Projects, a.cfg.PipelineLimit)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -210,6 +210,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectsLoadedMsg:
 		a.projectsView.Projects = msg.projects
 	case allPipelinesLoadedMsg:
+		a.pipelinesView.Limit = a.cfg.PipelineLimit
 		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
 		a.pipelinesView.Pipelines = msg.pipelines
@@ -230,6 +231,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.err = msg.err
 	case tickMsg:
 		return a, tea.Batch(a.refreshCurrentView(), a.tick())
+	case views.PipelineLimitCycleMsg:
+		limits := []int{20, 50, 100, 200}
+		cur := a.cfg.PipelineLimit
+		next := limits[0]
+		for i, l := range limits {
+			if l == cur && i+1 < len(limits) {
+				next = limits[i+1]
+				break
+			}
+		}
+		if cur >= limits[len(limits)-1] {
+			next = limits[0]
+		}
+		a.cfg.PipelineLimit = next
+		_ = a.cfg.Save(config.DefaultPath())
+		return a, a.loadAllPipelines()
 	case views.ProjectSearchMsg:
 		return a, func() tea.Msg {
 			results, err := a.pipelineSvc.SearchProjects(context.Background(), msg.Query)
@@ -427,6 +444,7 @@ func (a App) View() string {
 			{Key: "fn↑↓", Desc: "page"},
 			{Key: "Enter", Desc: "jobs"},
 			{Key: "/", Desc: "filter"},
+			{Key: "l", Desc: "limit"},
 			{Key: "Tab", Desc: "next tab"},
 			{Key: "q", Desc: "quit"},
 		}

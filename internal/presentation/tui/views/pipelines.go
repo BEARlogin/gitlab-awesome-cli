@@ -18,6 +18,7 @@ type PipelinesView struct {
 	Cursor    int
 	offset    int
 	height    int // visible rows
+	Limit     int
 	Filter    string
 	filtering bool
 }
@@ -25,6 +26,7 @@ type PipelinesView struct {
 func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
 
 type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }
+type PipelineLimitCycleMsg struct{}
 
 func (v *PipelinesView) SetHeight(h int) {
 	// subtract header lines (filter + padding + statusbar)
@@ -120,6 +122,8 @@ func (v PipelinesView) Update(msg tea.Msg) (PipelinesView, tea.Cmd) {
 			v.filtering = true
 			v.Filter = ""
 			v.applyFilter()
+		case "l":
+			return v, func() tea.Msg { return PipelineLimitCycleMsg{} }
 		}
 	}
 	return v, nil
@@ -202,9 +206,13 @@ func (v PipelinesView) View() string {
 		s += styles.HelpDesc.Render("  No pipelines match filter") + "\n"
 	}
 
-	// scroll indicator
-	if total > v.height {
-		s += styles.HelpDesc.Render(fmt.Sprintf("\n  %d/%d", v.Cursor+1, total)) + "\n"
+	// scroll indicator + limit
+	if total > 0 {
+		info := fmt.Sprintf("  %d/%d", v.Cursor+1, total)
+		if v.Limit > 0 {
+			info += fmt.Sprintf("  limit:%d", v.Limit)
+		}
+		s += "\n" + styles.HelpDesc.Render(info) + "\n"
 	}
 
 	return s

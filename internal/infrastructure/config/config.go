@@ -17,6 +17,7 @@ type Config struct {
 	Token           string        `yaml:"token"`
 	Projects        []string      `yaml:"projects"`
 	RefreshInterval time.Duration `yaml:"refresh_interval"`
+	PipelineLimit   int           `yaml:"pipeline_limit"`
 }
 
 func DefaultPath() string {
@@ -35,6 +36,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = 5 * time.Second
+	}
+	if cfg.PipelineLimit == 0 {
+		cfg.PipelineLimit = 50
 	}
 	return &cfg, nil
 }

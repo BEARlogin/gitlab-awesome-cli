@@ -37,7 +37,7 @@ func (s *PipelineService) ListPipelines(ctx context.Context, projectID int) ([]e
 	return s.projectRepo.ListPipelines(ctx, projectID)
 }
 
-func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string) ([]entity.Pipeline, error) {
+func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string, limit int) ([]entity.Pipeline, error) {
 	var all []entity.Pipeline
 	for _, path := range paths {
 		p, err := s.projectRepo.GetByPath(ctx, path)
@@ -56,6 +56,9 @@ func (s *PipelineService) LoadAllPipelines(ctx context.Context, paths []string) 
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].CreatedAt.After(all[j].CreatedAt)
 	})
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
 	return all, nil
 }
 
