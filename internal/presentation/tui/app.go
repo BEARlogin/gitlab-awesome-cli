@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -389,6 +390,7 @@ func (a App) refreshCurrentView() tea.Cmd {
 }
 
 func (a App) View() string {
+	// Header: tabs + breadcrumb
 	tabs := ""
 	viewNames := []string{"Projects", "Pipelines", "Jobs", "Log"}
 	for i, name := range viewNames {
@@ -400,10 +402,53 @@ func (a App) View() string {
 		}
 	}
 	bc := a.breadcrumb.View()
+	header := tabs + "\n" + bc + "\n"
+
 	errStr := ""
 	if a.err != nil {
 		errStr = styles.StatusFailed.Render(fmt.Sprintf("  Error: %v", a.err)) + "\n"
 	}
+
+	// Footer: hotkey hints
+	var hints []components.HotkeyHint
+	switch a.currentView {
+	case viewProjects:
+		hints = []components.HotkeyHint{
+			{Key: "↑↓", Desc: "navigate"},
+			{Key: "Enter", Desc: "select"},
+			{Key: "a", Desc: "add"},
+			{Key: "d", Desc: "delete"},
+			{Key: "Tab", Desc: "next tab"},
+			{Key: "q", Desc: "quit"},
+		}
+	case viewPipelines:
+		hints = []components.HotkeyHint{
+			{Key: "↑↓", Desc: "navigate"},
+			{Key: "^d/^u", Desc: "page"},
+			{Key: "Enter", Desc: "jobs"},
+			{Key: "/", Desc: "filter"},
+			{Key: "Tab", Desc: "next tab"},
+			{Key: "q", Desc: "quit"},
+		}
+	case viewJobs:
+		hints = []components.HotkeyHint{
+			{Key: "↑↓", Desc: "navigate"},
+			{Key: "Enter", Desc: "log"},
+			{Key: "r", Desc: "run/retry"},
+			{Key: "c", Desc: "cancel"},
+			{Key: "Esc", Desc: "back"},
+			{Key: "q", Desc: "quit"},
+		}
+	case viewLog:
+		hints = []components.HotkeyHint{
+			{Key: "↑↓", Desc: "scroll"},
+			{Key: "Esc", Desc: "back"},
+			{Key: "q", Desc: "quit"},
+		}
+	}
+	footer := components.NewStatusBar(hints).View()
+
+	// Content
 	var content string
 	switch a.currentView {
 	case viewProjects:
@@ -418,14 +463,23 @@ func (a App) View() string {
 	if a.confirmDialog != nil {
 		content += "\n" + a.confirmDialog.View()
 	}
-	hints := []components.HotkeyHint{
-		{Key: "↑↓", Desc: "navigate"},
-		{Key: "Enter", Desc: "select"},
-		{Key: "Esc", Desc: "back"},
-		{Key: "r", Desc: "run/retry"},
-		{Key: "c", Desc: "cancel"},
-		{Key: "q", Desc: "quit"},
+
+	// Fixed layout: header top, content middle, footer bottom
+	// headerLines=2 (tabs + breadcrumb), footerLines=1, padding=2
+	contentHeight := a.height - 5
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
-	sb := components.NewStatusBar(hints)
-	return tabs + "\n" + bc + "\n" + errStr + content + "\n" + sb.View() + "\n"
+
+	// Pad or truncate content to fill exactly contentHeight lines
+	contentLines := strings.Split(content, "\n")
+	if len(contentLines) > contentHeight {
+		contentLines = contentLines[:contentHeight]
+	}
+	for len(contentLines) < contentHeight {
+		contentLines = append(contentLines, "")
+	}
+	content = strings.Join(contentLines, "\n")
+
+	return header + errStr + content + "\n" + footer
 }
