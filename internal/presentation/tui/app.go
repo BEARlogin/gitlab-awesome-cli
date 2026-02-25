@@ -244,7 +244,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.ProjectAddMsg:
 		a.cfg.Projects = append(a.cfg.Projects, msg.Path)
 		_ = a.cfg.Save(config.DefaultPath())
-		return a, a.loadProjects()
+		return a, tea.Batch(a.loadProjects(), a.loadAllPipelines())
 	case views.ProjectDeleteMsg:
 		newProjects := make([]string, 0, len(a.cfg.Projects))
 		for _, p := range a.cfg.Projects {
@@ -254,7 +254,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.cfg.Projects = newProjects
 		_ = a.cfg.Save(config.DefaultPath())
-		return a, a.loadProjects()
+		return a, tea.Batch(a.loadProjects(), a.loadAllPipelines())
 	case views.ProjectSelectedMsg:
 		a.selectedProject = &msg.Project
 		a.currentView = viewPipelines
