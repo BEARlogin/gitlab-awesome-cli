@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -15,8 +16,17 @@ import (
 )
 
 func main() {
-	// Silence log output in TUI mode — infrastructure uses log.Printf
-	log.SetOutput(io.Discard)
+	// Log to file if GLCLI_LOG is set, otherwise discard
+	if logPath := os.Getenv("GLCLI_LOG"); logPath != "" {
+		_ = os.MkdirAll(filepath.Dir(logPath), 0755)
+		if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			log.SetOutput(f)
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+			defer f.Close()
+		}
+	} else {
+		log.SetOutput(io.Discard)
+	}
 
 	cfgPath := config.DefaultPath()
 	cfg, err := config.Load(cfgPath)

@@ -13,14 +13,15 @@ import (
 )
 
 type PipelinesView struct {
-	Pipelines []entity.Pipeline
-	filtered  []entity.Pipeline
-	Cursor    int
-	offset    int
-	height    int // visible rows
-	Limit     int
-	Filter    string
-	filtering bool
+	Pipelines     []entity.Pipeline
+	filtered      []entity.Pipeline
+	Cursor        int
+	offset        int
+	height        int // visible rows
+	Limit         int
+	Filter        string
+	filtering     bool
+	LoadingStatus string
 }
 
 func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
@@ -205,7 +206,11 @@ func (v PipelinesView) View() string {
 	}
 
 	if total == 0 && len(v.Pipelines) == 0 {
-		s += styles.HelpDesc.Render("  Loading pipelines...") + "\n"
+		if v.LoadingStatus != "" {
+			s += styles.HelpDesc.Render("  "+v.LoadingStatus) + "\n"
+		} else {
+			s += styles.HelpDesc.Render("  Loading pipelines...") + "\n"
+		}
 	}
 	if total == 0 && len(v.Pipelines) > 0 {
 		s += styles.HelpDesc.Render("  No pipelines match filter") + "\n"

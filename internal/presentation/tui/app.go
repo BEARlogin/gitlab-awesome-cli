@@ -42,6 +42,8 @@ type App struct {
 	width            int
 	height           int
 	err              error
+	loadingStatus    string
+	loading          bool
 }
 
 func NewApp(cfg *config.Config, ps *service.PipelineService, js *service.JobService) App {
@@ -69,10 +71,13 @@ type jobActionDoneMsg struct {
 	job *entity.Job
 	err error
 }
+type loadingStatusMsg struct{ text string }
 type errMsg struct{ err error }
 type tickMsg time.Time
 
 func (a App) Init() tea.Cmd {
+	a.loading = true
+	a.loadingStatus = fmt.Sprintf("Loading %d projects...", len(a.cfg.Projects))
 	return tea.Batch(a.loadAllPipelines(), a.tick())
 }
 
@@ -91,8 +96,10 @@ func (a App) loadProjects() tea.Cmd {
 }
 
 func (a App) loadAllPipelines() tea.Cmd {
+	projects := a.cfg.Projects
+	limit := a.cfg.PipelineLimit
 	return func() tea.Msg {
-		pls, err := a.pipelineSvc.LoadAllPipelines(context.Background(), a.cfg.Projects, a.cfg.PipelineLimit)
+		pls, err := a.pipelineSvc.LoadAllPipelines(context.Background(), projects, limit)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -230,6 +237,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.projectsView.Projects = msg.projects
 	case allPipelinesLoadedMsg:
 		a.err = nil
+		a.loading = false
+		a.loadingStatus = ""
 		a.pipelinesView.Limit = a.cfg.PipelineLimit
 		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
@@ -250,10 +259,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if a.selectedPipeline != nil {
 			return a, a.loadJobs(a.selectedPipeline.ProjectID, a.selectedPipeline.ID)
 		}
+	case loadingStatusMsg:
+		a.loadingStatus = msg.text
 	case errMsg:
 		a.err = msg.err
+		a.loading = false
+		a.loadingStatus = ""
 	case tickMsg:
-		return a, tea.Batch(a.refreshCurrentView(), a.tick())
+		var cmds []tea.Cmd
+		cmds = append(cmds, a.tick())
+		if !a.loading {
+			a.loading = true
+			a.loadingStatus = fmt.Sprintf("Refreshing %d projects...", len(a.cfg.Projects))
+			cmds = append(cmds, a.refreshCurrentView())
+		}
+		return a, tea.Batch(cmds...)
 	case views.PipelineLimitCycleMsg:
 		limits := []int{20, 50, 100, 200}
 		cur := a.cfg.PipelineLimit
@@ -512,6 +532,7 @@ func (a App) View() string {
 	case viewProjects:
 		content = a.projectsView.View()
 	case viewPipelines:
+		a.pipelinesView.LoadingStatus = a.loadingStatus
 		content = a.pipelinesView.View()
 	case viewJobs:
 		content = a.jobsView.View()
