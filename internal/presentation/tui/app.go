@@ -233,10 +233,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.pipelinesView.Limit = a.cfg.PipelineLimit
 		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
+		a.err = nil
 		a.pipelinesView.Pipelines = msg.pipelines
 	case jobsLoadedMsg:
+		a.err = nil
 		a.jobsView.Jobs = msg.jobs
 	case logLoadedMsg:
+		a.err = nil
 		a.logView, _ = a.logView.Update(views.LogContentMsg{
 			Content: msg.content,
 			JobName: msg.jobName,
