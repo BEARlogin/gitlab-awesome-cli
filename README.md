@@ -11,7 +11,9 @@
 
 **An interactive terminal UI for GitLab — like k9s, but for pipelines.**
 
-Monitor pipelines across all your projects, stream job logs, retry failures, and manage CI/CD without ever opening a browser tab.
+You're deep in the terminal — 16 tabs open, Claude Code running, deploys in flight. The last thing you want is to alt-tab into a browser, navigate to GitLab, click through three projects, and wait for the UI to load just to check if a pipeline passed.
+
+glcli keeps you in the terminal. Monitor pipelines across all your projects, stream job logs, retry failures, and manage CI/CD — without ever opening a browser tab. The built-in MCP server lets your AI assistant do the same.
 
 ---
 
