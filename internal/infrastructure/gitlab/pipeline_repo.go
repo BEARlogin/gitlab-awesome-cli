@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"time"
@@ -86,10 +87,12 @@ func (r *PipelineRepo) ListJobs(ctx context.Context, projectID, pipelineID int) 
 func (r *PipelineRepo) LoadAllPipelines(ctx context.Context, projectPaths []string, perProject int) ([]entity.Pipeline, error) {
 	log.Printf("[gitlab] LoadAllPipelines: paths=%v perProject=%d", projectPaths, perProject)
 	var all []entity.Pipeline
+	var lastErr error
 	for _, path := range projectPaths {
 		p, _, err := r.client.Projects.GetProject(path, nil, gogitlab.WithContext(ctx))
 		if err != nil {
 			log.Printf("[gitlab] LoadAllPipelines: skip %s: %v", path, err)
+			lastErr = err
 			continue
 		}
 
@@ -121,6 +124,9 @@ func (r *PipelineRepo) LoadAllPipelines(ctx context.Context, projectPaths []stri
 		}
 	}
 
+	if len(all) == 0 && lastErr != nil {
+		return nil, fmt.Errorf("all projects failed, last error: %w", lastErr)
+	}
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].CreatedAt.After(all[j].CreatedAt)
 	})
