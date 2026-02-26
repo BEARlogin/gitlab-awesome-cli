@@ -35,6 +35,14 @@ func (v *JobsView) ensureVisible() {
 	}
 }
 
+func (v *JobsView) SelectedJob() *entity.Job {
+	if len(v.Jobs) == 0 || v.Cursor >= len(v.Jobs) {
+		return nil
+	}
+	j := v.Jobs[v.Cursor]
+	return &j
+}
+
 type JobSelectedMsg struct{ Job entity.Job }
 type JobActionMsg struct {
 	Action string
@@ -117,6 +125,12 @@ func jobStatusStyle(status valueobject.JobStatus) lipgloss.Style {
 func (v JobsView) View() string {
 	s := "\n"
 	total := len(v.Jobs)
+	if v.Cursor >= total && total > 0 {
+		v.Cursor = total - 1
+	}
+	if v.offset >= total {
+		v.offset = 0
+	}
 	end := v.offset + v.height
 	if end > total {
 		end = total

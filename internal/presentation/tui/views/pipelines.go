@@ -175,6 +175,9 @@ func (v PipelinesView) View() string {
 	s += "\n"
 
 	total := len(v.filtered)
+	if v.offset >= total && total > 0 {
+		v.offset = 0
+	}
 	end := v.offset + v.height
 	if end > total {
 		end = total

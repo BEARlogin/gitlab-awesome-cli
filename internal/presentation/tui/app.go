@@ -429,8 +429,15 @@ func (a App) refreshCurrentView() tea.Cmd {
 	case viewPipelines:
 		return a.loadAllPipelines()
 	case viewJobs:
-		if a.selectedProject != nil && a.selectedPipeline != nil {
-			return a.loadJobs(a.selectedProject.ID, a.selectedPipeline.ID)
+		if a.selectedPipeline != nil {
+			return a.loadJobs(a.selectedPipeline.ProjectID, a.selectedPipeline.ID)
+		}
+	case viewLog:
+		if a.selectedPipeline != nil {
+			job := a.jobsView.SelectedJob()
+			if job != nil {
+				return a.loadLog(job.ProjectID, job.ID, job.Name)
+			}
 		}
 	}
 	return nil
