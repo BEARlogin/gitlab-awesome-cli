@@ -234,6 +234,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.delegateToView(normalizedMsg)
 	case projectsLoadedMsg:
 		a.err = nil
+		a.loading = false
+		a.loadingStatus = ""
 		a.projectsView.Projects = msg.projects
 	case allPipelinesLoadedMsg:
 		a.err = nil
@@ -243,12 +245,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.pipelinesView.SetPipelines(msg.pipelines)
 	case pipelinesLoadedMsg:
 		a.err = nil
+		a.loading = false
+		a.loadingStatus = ""
 		a.pipelinesView.Pipelines = msg.pipelines
 	case jobsLoadedMsg:
 		a.err = nil
+		a.loading = false
+		a.loadingStatus = ""
 		a.jobsView.Jobs = msg.jobs
 	case logLoadedMsg:
 		a.err = nil
+		a.loading = false
+		a.loadingStatus = ""
 		a.logView, _ = a.logView.Update(views.LogContentMsg{
 			Content: msg.content,
 			JobName: msg.jobName,
