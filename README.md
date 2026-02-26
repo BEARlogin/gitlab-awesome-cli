@@ -216,27 +216,34 @@ go install github.com/bearlogin/gitlab-awesome-cli/cmd/glcli-mcp@latest
 
 ### Register in Claude Code
 
-```bash
-claude mcp add glcli glcli-mcp
-```
-
-Or with debug logging:
+If `glcli-mcp` is in your `$PATH`:
 
 ```bash
-claude mcp add glcli -- env GLCLI_MCP_LOG=/tmp/glcli-mcp.log glcli-mcp
+claude mcp add glcli -- glcli-mcp
 ```
 
-Or manually add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
+If it's **not** in your `$PATH` (e.g. installed via `go install`), use the full path:
+
+```bash
+claude mcp add glcli -- ~/go/bin/glcli-mcp
+```
+
+To enable debug logging, add the server manually to `~/.claude/settings.json` (global) or `.claude/settings.json` (project-level):
 
 ```json
 {
   "mcpServers": {
     "glcli": {
-      "command": "glcli-mcp"
+      "command": "glcli-mcp",
+      "env": {
+        "GLCLI_MCP_LOG": "/tmp/glcli-mcp.log"
+      }
     }
   }
 }
 ```
+
+> **Note:** avoid wrapping the binary with `env` in the `command` field — use the `env` object instead, otherwise stdin may not be forwarded correctly.
 
 ### Available Tools
 
