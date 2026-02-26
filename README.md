@@ -104,7 +104,12 @@ Projects (comma-separated, e.g. group/project1,group/project2): mygroup/api,mygr
 Config saved to ~/.glcli.yaml
 ```
 
-You need a GitLab **Personal Access Token** with `read_api` scope (add `write_repository` if you want to trigger/retry/cancel pipelines).
+You need a GitLab **Personal Access Token** with the following scopes:
+
+| Scope | Required | What it's used for |
+|-------|----------|--------------------|
+| `read_api` | yes | List projects, pipelines, jobs, read logs |
+| `api` | for actions | Play/retry/cancel jobs, search projects |
 
 ---
 
