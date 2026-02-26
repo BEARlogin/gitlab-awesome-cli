@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ var version = "dev"
 func setupLog() *os.File {
 	logPath := os.Getenv("GLCLI_MCP_LOG")
 	if logPath == "" {
-		log.SetOutput(os.Stderr)
+		log.SetOutput(io.Discard)
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
@@ -45,13 +46,15 @@ func main() {
 
 	cfg, err := config.Load(config.DefaultPath())
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "glcli-mcp: failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 	log.Printf("config loaded: url=%s projects=%v", cfg.GitLabURL, cfg.Projects)
 
 	client, err := gitlabinfra.NewClient(cfg.GitLabURL, cfg.Token)
 	if err != nil {
-		log.Fatalf("GitLab client error: %v", err)
+		fmt.Fprintf(os.Stderr, "glcli-mcp: gitlab client error: %v\n", err)
+		os.Exit(1)
 	}
 	log.Print("gitlab client created")
 
