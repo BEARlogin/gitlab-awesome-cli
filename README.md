@@ -216,7 +216,17 @@ go install github.com/bearlogin/gitlab-awesome-cli/cmd/glcli-mcp@latest
 
 ### Register in Claude Code
 
-Add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
+```bash
+claude mcp add glcli glcli-mcp
+```
+
+Or with debug logging:
+
+```bash
+claude mcp add glcli -- env GLCLI_MCP_LOG=/tmp/glcli-mcp.log glcli-mcp
+```
+
+Or manually add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
 
 ```json
 {
