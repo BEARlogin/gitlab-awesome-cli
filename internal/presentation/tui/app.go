@@ -664,6 +664,12 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 			a.breadcrumb.Parts = []string{"New MR"}
 			return nil
 		}
+		if msg.String() == "r" {
+			a.mergeRequestsView.Reset()
+			a.loading = true
+			a.loadingStatus = "Refreshing merge requests..."
+			return a.loadAllMRs()
+		}
 		a.mergeRequestsView, cmd = a.mergeRequestsView.Update(msg)
 	case viewMRCreate:
 		a.mrCreateView, cmd = a.mrCreateView.Update(msg)
@@ -886,6 +892,7 @@ func (a App) View() string {
 			{Key: "↑↓", Desc: "navigate"},
 			{Key: "Enter", Desc: "detail"},
 			{Key: "n", Desc: "new MR"},
+			{Key: "r", Desc: "refresh"},
 			{Key: "/", Desc: "filter"},
 			{Key: "Esc", Desc: "back"},
 			{Key: "q", Desc: "quit"},

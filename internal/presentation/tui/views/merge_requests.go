@@ -70,6 +70,14 @@ func (v *MergeRequestsView) VisibleMRs() []entity.MergeRequest {
 	return v.filtered
 }
 
+func (v *MergeRequestsView) Reset() {
+	v.MRs = nil
+	v.filtered = nil
+	v.loaded = false
+	v.Cursor = 0
+	v.offset = 0
+}
+
 func (v *MergeRequestsView) SetMRs(mrs []entity.MergeRequest) {
 	v.MRs = mrs
 	v.loaded = true
