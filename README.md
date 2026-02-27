@@ -9,49 +9,108 @@
   ╚═════╝ ╚══════╝ ╚═════╝╚══════╝╚═╝
 ```
 
-**An interactive terminal UI for GitLab — like k9s, but for pipelines.**
+**An interactive terminal UI for GitLab — like k9s, but for pipelines and merge requests.**
 
 You're deep in the terminal — 16 tabs open, Claude Code running, deploys in flight. The last thing you want is to alt-tab into a browser, navigate to GitLab, click through three projects, and wait for the UI to load just to check if a pipeline passed.
 
-glcli keeps you in the terminal. Monitor pipelines across all your projects, stream job logs, retry failures, and manage CI/CD — without ever opening a browser tab. The built-in MCP server lets your AI assistant do the same.
+glcli keeps you in the terminal. Monitor pipelines across all your projects, stream job logs, retry failures, review merge request diffs, create and merge MRs — without ever opening a browser tab. The built-in MCP server lets your AI assistant do the same.
 
 ---
 
 ## Preview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  glcli  [1] Projects  [2] Pipelines  [3] Jobs  [4] Log          ↻ 5s  l:50 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  PIPELINES  (47 total)  /filter                                             │
-│                                                                             │
-│  PROJECT                  BRANCH          STATUS     DURATION   STARTED     │
-│  ──────────────────────── ─────────────── ────────── ────────── ─────────── │
-│  group/backend            main            ● running  2m 14s     just now    │
-│  group/frontend           feat/auth       ✓ success  4m 33s     3 min ago   │
-│  group/api-gateway        main            ✓ success  1m 58s     7 min ago   │
-│  group/worker             fix/memory-leak ✗ failed   3m 01s     12 min ago  │
-│  group/infra              main            ● running  0m 44s     just now    │
-│  group/backend            feat/payments   ⏸ manual   —          15 min ago  │
-│                                                                             │
-│                                                                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  j/k navigate  enter select  r retry  c cancel  / filter  q quit           │
-└─────────────────────────────────────────────────────────────────────────────┘
+ 1:Projects   2:Pipelines   3:Jobs   4:Log   5:MRs
+ infrasamurai/app
+
+  PROJECT          #ID     BRANCH           STATUS     AGE
+  ──────────────── ─────── ──────────────── ────────── ────────
+▸ app              #7401   main             ✓ success  2h ago
+  app              #7399   feat/payments    ● running  3h ago
+  dashboard        #7388   main             ✓ success  5h ago
+  backend          #7380   fix/memory-leak  ✗ failed   8h ago
+  instabot         #7372   main             ⏸ manual   12h ago
+
+  1/47
+ ↑↓ navigate  fn↑↓ page  Enter jobs  c commits  / filter  l limit  Tab next tab  q quit
+```
+
+### Merge Request Detail with Colored Diffs
+
+```
+ 1:Projects   2:Pipelines   3:Jobs   4:Log   5:MRs
+ mygroup/api  !42
+
+ MR !42: Add user authentication
+
+ ◉ !42: Add user authentication
+ Author: @bearlogin  |  feat/auth → main  |  opened  |  can_be_merged
+
+ [Diffs]  |   Comments
+ ────────────────────────────────────────────────────────────
+
+ src/auth/handler.go (new)
+ @@ -0,0 +1,25 @@
+ +package auth
+ +
+ +func NewHandler(svc *Service) *Handler {
+ +    return &Handler{svc: svc}
+ +}
+
+ src/main.go
+ @@ -10,6 +10,8 @@
+  func main() {
+      router := mux.NewRouter()
+ +    authSvc := auth.NewService(db)
+ +    router.Handle("/login", auth.NewHandler(authSvc))
+      router.Handle("/api", apiHandler)
+  }
+
+ ↑↓ scroll  Tab diff/comments  r refresh  a approve  m merge  Esc back  q quit
+```
+
+### Create Merge Request with Branch Autocomplete
+
+```
+ 1:Projects   2:Pipelines   3:Jobs   4:Log   5:MRs
+ mygroup/api  New MR
+
+  Create Merge Request
+
+▸ Source Branch   feat█
+   ▸ feat/auth
+     feat/payments
+     feat/notifications
+  Target Branch   main
+  Title
+  Description
+  Draft           [ ]
+
+  Tab/↑↓ navigate  Enter select/next  Ctrl+S submit  Esc cancel
 ```
 
 ---
 
 ## Features
 
-- **Multi-view TUI** — Projects, Pipelines, Jobs, and Log tabs in a single terminal window
+### Pipelines & Jobs
 - **All pipelines at a glance** — aggregates pipelines from all configured projects on one screen
-- **Live auto-refresh** — configurable polling interval with a visible countdown
-- **Job log streaming** — tail logs in real time with viewport scrolling
-- **Pipeline actions** — run manual jobs, retry failed, cancel running — all with a confirmation dialog
+- **Live auto-refresh** — configurable polling interval
+- **Job log streaming** — tail logs with viewport scrolling
+- **Pipeline actions** — run manual jobs, retry failed, cancel running — with confirmation dialogs
 - **Fuzzy filter** — press `/` to filter pipelines by project name, branch, or status
 - **Pipeline limit control** — press `l` to cycle the fetch limit: 20 → 50 → 100 → 200
+- **Commit history** — press `c` on a pipeline to view commits for that ref
+
+### Merge Requests
+- **MR list** — view open merge requests across all configured projects
+- **MR detail** — diffs with syntax-aware coloring (green additions, red deletions, cyan hunk headers) and comments
+- **Create MR** — interactive form with branch autocomplete from GitLab API, source/target validation
+- **Approve & Merge** — one-key actions with confirmation dialogs
+- **Force refresh** — press `r` to reload MR data
+
+### General
+- **Multi-view TUI** — Projects, Pipelines, Jobs, Log, and MRs tabs
 - **Add/remove projects** — interactive autocomplete search against the GitLab API
 - **Vim-style navigation** — `j`/`k`, `g`/`G`, `Ctrl+u`/`Ctrl+d`
 - **Russian keyboard layout support** — keys work regardless of active layout
@@ -110,8 +169,8 @@ You need a GitLab **Personal Access Token** with the following scopes:
 
 | Scope | Required | What it's used for |
 |-------|----------|--------------------|
-| `read_api` | yes | List projects, pipelines, jobs, read logs |
-| `api` | for actions | Play/retry/cancel jobs, search projects |
+| `read_api` | yes | List projects, pipelines, jobs, MRs, read logs |
+| `api` | for actions | Play/retry/cancel jobs, create/approve/merge MRs |
 
 ---
 
@@ -149,9 +208,10 @@ pipeline_limit: 50
 | `1`              | Go to Projects view                |
 | `2`              | Go to Pipelines view               |
 | `3`              | Go to Jobs view                    |
-| `4`              | Go to Log view                     |
+| `5`              | Go to MRs view                     |
 | `Tab`            | Next view                          |
 | `Shift+Tab`      | Previous view                      |
+| `Esc`            | Go back                            |
 | `q` / `Ctrl+C`   | Quit                               |
 
 ### Navigation
@@ -165,24 +225,6 @@ pipeline_limit: 50
 | `Ctrl+d`     | Scroll half-page down           |
 | `Ctrl+u`     | Scroll half-page up             |
 | `Enter`      | Select / drill into             |
-| `Esc`        | Go back / close dialog          |
-
-### Pipelines view
-
-| Key | Action                                           |
-|-----|--------------------------------------------------|
-| `/` | Open filter prompt                               |
-| `l` | Cycle pipeline limit (20 → 50 → 100 → 200)      |
-| `r` | Retry selected pipeline                          |
-| `c` | Cancel selected pipeline                         |
-
-### Jobs view
-
-| Key | Action                          |
-|-----|---------------------------------|
-| `r` | Retry selected job              |
-| `p` | Play / trigger manual job       |
-| `c` | Cancel selected job             |
 
 ### Projects view
 
@@ -190,6 +232,38 @@ pipeline_limit: 50
 |-----|---------------------------------|
 | `a` | Add project (with search)       |
 | `d` | Remove project                  |
+| `m` | Go to MRs view                  |
+
+### Pipelines view
+
+| Key | Action                                           |
+|-----|--------------------------------------------------|
+| `/` | Open filter prompt                               |
+| `l` | Cycle pipeline limit (20 → 50 → 100 → 200)      |
+| `c` | View commits for selected pipeline's ref         |
+
+### Jobs view
+
+| Key | Action                          |
+|-----|---------------------------------|
+| `r` | Run manual / retry failed job   |
+| `c` | Cancel running job              |
+
+### MRs view
+
+| Key | Action                          |
+|-----|---------------------------------|
+| `/` | Open filter prompt              |
+| `n` | Create new merge request        |
+
+### MR Detail view
+
+| Key   | Action                          |
+|-------|---------------------------------|
+| `Tab` | Switch between Diffs/Comments   |
+| `r`   | Force refresh                   |
+| `a`   | Approve merge request           |
+| `m`   | Merge merge request             |
 
 ### Log view
 
@@ -259,6 +333,14 @@ To enable debug logging, add the server manually to `~/.claude/settings.json` (g
 | `retry_job` | Retry a failed job |
 | `cancel_job` | Cancel a running/pending job |
 | `search_projects` | Search GitLab projects by name or path |
+| `list_merge_requests` | List merge requests for a project |
+| `get_merge_request` | Get details of a specific merge request |
+| `list_mr_notes` | List comments/notes on a merge request |
+| `get_mr_diffs` | Get diffs of a merge request |
+| `approve_mr` | Approve a merge request |
+| `merge_mr` | Merge a merge request |
+| `create_merge_request` | Create a new merge request |
+| `list_pipeline_commits` | List commits for a pipeline ref |
 
 ### Resources
 
@@ -275,6 +357,10 @@ Once registered, just ask your AI assistant in natural language:
 > What's the log of the latest failed job in mygroup/api?
 > Retry that job
 > List all running pipelines on main branch
+> Show open merge requests
+> Create a merge request from feat/auth to main with title "Add authentication"
+> Approve MR !42
+> What are the diffs in MR !42?
 ```
 
 ---
@@ -319,9 +405,9 @@ internal/
     config/             — YAML config loading + setup wizard
   presentation/
     tui/                — terminal UI
-      views/            — Projects, Pipelines, Jobs, Log screens
+      views/            — Projects, Pipelines, Jobs, Log, MRs, MR Detail, MR Create, Commits
       components/       — shared widgets (statusbar, breadcrumb, confirm dialog)
-      styles/           — lipgloss theme
+      styles/           — lipgloss theme (incl. diff coloring)
       keymap/           — key normalization incl. Russian layout
     mcp/                — MCP server (tools, resources, formatters)
 ```
