@@ -70,6 +70,10 @@ func (s *PipelineService) SearchProjects(ctx context.Context, query string) ([]e
 	return s.projectRepo.Search(ctx, query)
 }
 
+func (s *PipelineService) ListBranches(ctx context.Context, projectID int, search string) ([]string, error) {
+	return s.projectRepo.ListBranches(ctx, projectID, search)
+}
+
 func (s *PipelineService) ListJobs(ctx context.Context, projectID, pipelineID int) ([]entity.Job, error) {
 	return s.pipelineRepo.ListJobs(ctx, projectID, pipelineID)
 }

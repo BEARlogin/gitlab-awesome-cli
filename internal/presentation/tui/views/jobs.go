@@ -82,11 +82,11 @@ func (v JobsView) Update(msg tea.Msg) (JobsView, tea.Cmd) {
 			}
 			v.ensureVisible()
 		case "enter":
-			if len(v.Jobs) > 0 {
+			if len(v.Jobs) > 0 && v.Cursor < len(v.Jobs) {
 				return v, func() tea.Msg { return JobSelectedMsg{Job: v.Jobs[v.Cursor]} }
 			}
 		case "r":
-			if len(v.Jobs) > 0 {
+			if len(v.Jobs) > 0 && v.Cursor < len(v.Jobs) {
 				job := v.Jobs[v.Cursor]
 				if job.Status == valueobject.JobManual {
 					return v, func() tea.Msg { return JobActionMsg{Action: "play", Job: job} }
@@ -96,7 +96,7 @@ func (v JobsView) Update(msg tea.Msg) (JobsView, tea.Cmd) {
 				}
 			}
 		case "c":
-			if len(v.Jobs) > 0 {
+			if len(v.Jobs) > 0 && v.Cursor < len(v.Jobs) {
 				job := v.Jobs[v.Cursor]
 				if job.Status.CanCancel() {
 					return v, func() tea.Msg { return JobActionMsg{Action: "cancel", Job: job} }

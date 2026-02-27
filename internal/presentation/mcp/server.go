@@ -6,7 +6,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func NewServer(cfg *config.Config, pSvc *service.PipelineService, jSvc *service.JobService, version string) *mcp.Server {
+func NewServer(cfg *config.Config, pSvc *service.PipelineService, jSvc *service.JobService, mrSvc *service.MergeRequestService, version string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "glcli-mcp",
 		Version: version,
@@ -59,6 +59,47 @@ func NewServer(cfg *config.Config, pSvc *service.PipelineService, jSvc *service.
 		Name:        "search_projects",
 		Description: "Search GitLab projects by name or path",
 	}, searchProjectsHandler(pSvc))
+
+	// Merge Request tools
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_merge_requests",
+		Description: "List merge requests for a project",
+	}, listMergeRequestsHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_merge_request",
+		Description: "Get details of a specific merge request",
+	}, getMergeRequestHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_mr_notes",
+		Description: "List comments/notes on a merge request",
+	}, listMRNotesHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_mr_diffs",
+		Description: "Get diffs of a merge request",
+	}, getMRDiffsHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "approve_mr",
+		Description: "Approve a merge request",
+	}, approveMRHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "merge_mr",
+		Description: "Merge a merge request",
+	}, mergeMRHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "create_merge_request",
+		Description: "Create a new merge request",
+	}, createMRHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_pipeline_commits",
+		Description: "List commits for a pipeline ref (branch/tag)",
+	}, listPipelineCommitsHandler(mrSvc))
 
 	return server
 }

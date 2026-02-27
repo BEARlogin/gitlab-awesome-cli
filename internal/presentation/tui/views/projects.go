@@ -9,12 +9,13 @@ import (
 )
 
 type ProjectsView struct {
-	Projects    []entity.Project
-	Cursor      int
-	adding      bool
-	input       string
-	suggestions []entity.Project
-	sugCursor   int
+	Projects      []entity.Project
+	Cursor        int
+	adding        bool
+	input         string
+	suggestions   []entity.Project
+	sugCursor     int
+	LoadingStatus string
 }
 
 func NewProjectsView() ProjectsView { return ProjectsView{} }
@@ -137,7 +138,11 @@ func (v ProjectsView) View() string {
 		s += style.Render(line) + "\n"
 	}
 	if len(v.Projects) == 0 {
-		s += styles.HelpDesc.Render("  No projects configured") + "\n"
+		if v.LoadingStatus != "" {
+			s += styles.HelpDesc.Render("  "+v.LoadingStatus) + "\n"
+		} else {
+			s += styles.HelpDesc.Render("  No projects configured") + "\n"
+		}
 	}
 	s += "\n"
 	if v.adding {

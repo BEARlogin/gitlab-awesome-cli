@@ -23,4 +23,10 @@ var (
 	Selected = lipgloss.NewStyle().Bold(true).Foreground(White).Background(lipgloss.Color("62"))
 	HelpKey = lipgloss.NewStyle().Bold(true).Foreground(Purple)
 	HelpDesc = lipgloss.NewStyle().Foreground(Gray)
+
+	// Diff styles
+	DiffAdd      = lipgloss.NewStyle().Foreground(lipgloss.Color("120")).Background(lipgloss.Color("22"))
+	DiffDel      = lipgloss.NewStyle().Foreground(lipgloss.Color("210")).Background(lipgloss.Color("52"))
+	DiffHunk     = lipgloss.NewStyle().Foreground(Cyan).Bold(true)
+	DiffFilePath = lipgloss.NewStyle().Foreground(White).Bold(true).Background(lipgloss.Color("237")).Padding(0, 1)
 )

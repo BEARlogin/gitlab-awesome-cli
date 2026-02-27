@@ -61,11 +61,14 @@ func main() {
 	projectRepo := gitlabinfra.NewProjectRepo(client)
 	pipelineRepo := gitlabinfra.NewPipelineRepo(client)
 	jobRepo := gitlabinfra.NewJobRepo(client)
+	mrRepo := gitlabinfra.NewMergeRequestRepo(client)
+	commitRepo := gitlabinfra.NewCommitRepo(client)
 
 	pipelineSvc := service.NewPipelineService(projectRepo, pipelineRepo)
 	jobSvc := service.NewJobService(jobRepo)
+	mrSvc := service.NewMergeRequestService(mrRepo, commitRepo)
 
-	server := mcpserver.NewServer(cfg, pipelineSvc, jobSvc, version)
+	server := mcpserver.NewServer(cfg, pipelineSvc, jobSvc, mrSvc, version)
 	log.Print("mcp server created, starting stdio transport")
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

@@ -48,11 +48,14 @@ func main() {
 	projectRepo := gitlabinfra.NewProjectRepo(client)
 	pipelineRepo := gitlabinfra.NewPipelineRepo(client)
 	jobRepo := gitlabinfra.NewJobRepo(client)
+	mrRepo := gitlabinfra.NewMergeRequestRepo(client)
+	commitRepo := gitlabinfra.NewCommitRepo(client)
 
 	pipelineSvc := service.NewPipelineService(projectRepo, pipelineRepo)
 	jobSvc := service.NewJobService(jobRepo)
+	mrSvc := service.NewMergeRequestService(mrRepo, commitRepo)
 
-	app := tui.NewApp(cfg, pipelineSvc, jobSvc)
+	app := tui.NewApp(cfg, pipelineSvc, jobSvc, mrSvc)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -57,6 +57,27 @@ func (r *ProjectRepo) Search(ctx context.Context, query string) ([]entity.Projec
 	return result, nil
 }
 
+func (r *ProjectRepo) ListBranches(ctx context.Context, projectID int, search string) ([]string, error) {
+	log.Printf("[gitlab] ListBranches: project=%d search=%q", projectID, search)
+	opts := &gogitlab.ListBranchesOptions{
+		ListOptions: gogitlab.ListOptions{PerPage: 20},
+	}
+	if search != "" {
+		opts.Search = gogitlab.Ptr(search)
+	}
+	branches, _, err := r.client.Branches.ListBranches(projectID, opts, gogitlab.WithContext(ctx))
+	if err != nil {
+		log.Printf("[gitlab] ListBranches: error: %v", err)
+		return nil, err
+	}
+	result := make([]string, len(branches))
+	for i, b := range branches {
+		result[i] = b.Name
+	}
+	log.Printf("[gitlab] ListBranches: got %d branches", len(result))
+	return result, nil
+}
+
 func (r *ProjectRepo) ListPipelines(ctx context.Context, projectID int) ([]entity.Pipeline, error) {
 	log.Printf("[gitlab] ListPipelines: project=%d", projectID)
 	opts := &gogitlab.ListProjectPipelinesOptions{

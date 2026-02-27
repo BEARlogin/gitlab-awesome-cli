@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/application/service"
+	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/infrastructure/config"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -34,6 +35,30 @@ type JobActionInput struct {
 
 type SearchProjectsInput struct {
 	Query string `json:"query" jsonschema:"search query for project name or path"`
+}
+
+type ListMergeRequestsInput struct {
+	ProjectID int    `json:"project_id" jsonschema:"GitLab project ID"`
+	State     string `json:"state,omitempty" jsonschema:"MR state filter (opened/merged/closed)"`
+}
+
+type MRInput struct {
+	ProjectID int `json:"project_id" jsonschema:"GitLab project ID"`
+	MRIID     int `json:"mr_iid" jsonschema:"merge request IID (project-scoped ID)"`
+}
+
+type CreateMRInput struct {
+	ProjectID    int    `json:"project_id" jsonschema:"GitLab project ID"`
+	SourceBranch string `json:"source_branch" jsonschema:"source branch name"`
+	TargetBranch string `json:"target_branch" jsonschema:"target branch name"`
+	Title        string `json:"title" jsonschema:"merge request title"`
+	Description  string `json:"description,omitempty" jsonschema:"merge request description"`
+	Draft        bool   `json:"draft,omitempty" jsonschema:"create as draft MR"`
+}
+
+type ListPipelineCommitsInput struct {
+	ProjectID int    `json:"project_id" jsonschema:"GitLab project ID"`
+	Ref       string `json:"ref" jsonschema:"git ref (branch/tag) to list commits for"`
 }
 
 // Tool handlers
@@ -176,6 +201,119 @@ func searchProjectsHandler(pSvc *service.PipelineService) func(context.Context, 
 		}
 		log.Printf("[tool] search_projects: ok, %d results", len(projects))
 		return textResult(formatProjects(projects)), nil, nil
+	}
+}
+
+// Merge Request handlers
+
+func listMergeRequestsHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, ListMergeRequestsInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input ListMergeRequestsInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_merge_requests: project=%d state=%q", input.ProjectID, input.State)
+		mrs, err := mrSvc.ListMRs(ctx, input.ProjectID, input.State)
+		if err != nil {
+			log.Printf("[tool] list_merge_requests: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] list_merge_requests: ok, %d MRs", len(mrs))
+		return textResult(formatMergeRequests(mrs)), nil, nil
+	}
+}
+
+func getMergeRequestHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] get_merge_request: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		mr, err := mrSvc.GetMR(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] get_merge_request: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] get_merge_request: ok")
+		return textResult(formatMergeRequestDetail(mr)), nil, nil
+	}
+}
+
+func listMRNotesHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_mr_notes: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		notes, err := mrSvc.ListNotes(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] list_mr_notes: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] list_mr_notes: ok, %d notes", len(notes))
+		return textResult(formatMRNotes(notes)), nil, nil
+	}
+}
+
+func getMRDiffsHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] get_mr_diffs: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		diffs, err := mrSvc.GetDiffs(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] get_mr_diffs: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] get_mr_diffs: ok, %d files", len(diffs))
+		return textResult(formatMRDiffs(diffs)), nil, nil
+	}
+}
+
+func approveMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] approve_mr: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		err := mrSvc.ApproveMR(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] approve_mr: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] approve_mr: ok")
+		return textResult(fmt.Sprintf("Merge request !%d approved.", input.MRIID)), nil, nil
+	}
+}
+
+func mergeMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] merge_mr: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		mr, err := mrSvc.MergeMR(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] merge_mr: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] merge_mr: ok, state=%s", mr.State)
+		return textResult(fmt.Sprintf("Merge request merged: %s", formatMergeRequest(*mr))), nil, nil
+	}
+}
+
+func createMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, CreateMRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input CreateMRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] create_merge_request: project=%d source=%s target=%s title=%q", input.ProjectID, input.SourceBranch, input.TargetBranch, input.Title)
+		opts := entity.CreateMROptions{
+			SourceBranch: input.SourceBranch,
+			TargetBranch: input.TargetBranch,
+			Title:        input.Title,
+			Description:  input.Description,
+			Draft:        input.Draft,
+		}
+		mr, err := mrSvc.CreateMR(ctx, input.ProjectID, opts)
+		if err != nil {
+			log.Printf("[tool] create_merge_request: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] create_merge_request: ok, iid=%d", mr.IID)
+		return textResult(fmt.Sprintf("Merge request created: %s", formatMergeRequest(*mr))), nil, nil
+	}
+}
+
+func listPipelineCommitsHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, ListPipelineCommitsInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input ListPipelineCommitsInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_pipeline_commits: project=%d ref=%s", input.ProjectID, input.Ref)
+		commits, err := mrSvc.ListCommits(ctx, input.ProjectID, input.Ref)
+		if err != nil {
+			log.Printf("[tool] list_pipeline_commits: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] list_pipeline_commits: ok, %d commits", len(commits))
+		return textResult(formatCommits(commits)), nil, nil
 	}
 }
 

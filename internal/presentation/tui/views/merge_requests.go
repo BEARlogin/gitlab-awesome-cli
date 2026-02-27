@@ -3,7 +3,6 @@ package views
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
@@ -12,45 +11,43 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type PipelinesView struct {
-	Pipelines     []entity.Pipeline
-	filtered      []entity.Pipeline
+type MergeRequestsView struct {
+	MRs           []entity.MergeRequest
+	filtered      []entity.MergeRequest
 	Cursor        int
 	offset        int
-	height        int // visible rows
-	Limit         int
+	height        int
 	Filter        string
 	filtering     bool
 	LoadingStatus string
 }
 
-func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
+func NewMergeRequestsView() MergeRequestsView { return MergeRequestsView{height: 20} }
 
-func (v PipelinesView) IsInputMode() bool { return v.filtering }
+func (v MergeRequestsView) IsInputMode() bool { return v.filtering }
 
-type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }
-type PipelineLimitCycleMsg struct{}
+type MRSelectedMsg struct{ MR entity.MergeRequest }
 
-func (v *PipelinesView) SetHeight(h int) {
-	// subtract header lines (filter + padding + statusbar)
+func (v *MergeRequestsView) SetHeight(h int) {
 	v.height = h - 6
 	if v.height < 5 {
 		v.height = 5
 	}
 }
 
-func (v *PipelinesView) applyFilter() {
+func (v *MergeRequestsView) applyFilter() {
 	if v.Filter == "" {
-		v.filtered = v.Pipelines
+		v.filtered = v.MRs
 		return
 	}
 	f := strings.ToLower(v.Filter)
 	v.filtered = nil
-	for _, pl := range v.Pipelines {
-		if strings.Contains(strings.ToLower(pl.ProjectPath), f) ||
-			strings.Contains(strings.ToLower(pl.Ref), f) ||
-			strings.Contains(strings.ToLower(string(pl.Status)), f) {
-			v.filtered = append(v.filtered, pl)
+	for _, mr := range v.MRs {
+		if strings.Contains(strings.ToLower(mr.Title), f) ||
+			strings.Contains(strings.ToLower(mr.Author), f) ||
+			strings.Contains(strings.ToLower(mr.SourceBranch), f) ||
+			strings.Contains(strings.ToLower(mr.ProjectPath), f) {
+			v.filtered = append(v.filtered, mr)
 		}
 	}
 	if v.Cursor >= len(v.filtered) {
@@ -59,7 +56,7 @@ func (v *PipelinesView) applyFilter() {
 	v.ensureVisible()
 }
 
-func (v *PipelinesView) ensureVisible() {
+func (v *MergeRequestsView) ensureVisible() {
 	if v.Cursor < v.offset {
 		v.offset = v.Cursor
 	}
@@ -68,7 +65,16 @@ func (v *PipelinesView) ensureVisible() {
 	}
 }
 
-func (v PipelinesView) Update(msg tea.Msg) (PipelinesView, tea.Cmd) {
+func (v *MergeRequestsView) VisibleMRs() []entity.MergeRequest {
+	return v.filtered
+}
+
+func (v *MergeRequestsView) SetMRs(mrs []entity.MergeRequest) {
+	v.MRs = mrs
+	v.applyFilter()
+}
+
+func (v MergeRequestsView) Update(msg tea.Msg) (MergeRequestsView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if v.filtering {
@@ -119,54 +125,29 @@ func (v PipelinesView) Update(msg tea.Msg) (PipelinesView, tea.Cmd) {
 			v.ensureVisible()
 		case "enter":
 			if len(v.filtered) > 0 && v.Cursor < len(v.filtered) {
-				return v, func() tea.Msg { return PipelineSelectedMsg{Pipeline: v.filtered[v.Cursor]} }
+				return v, func() tea.Msg { return MRSelectedMsg{MR: v.filtered[v.Cursor]} }
 			}
 		case "/":
 			v.filtering = true
 			v.Filter = ""
 			v.applyFilter()
-		case "l":
-			return v, func() tea.Msg { return PipelineLimitCycleMsg{} }
 		}
 	}
 	return v, nil
 }
 
-func (v *PipelinesView) SetPipelines(pls []entity.Pipeline) {
-	v.Pipelines = pls
-	v.applyFilter()
-}
-
-func statusStyle(status valueobject.PipelineStatus) lipgloss.Style {
-	switch status {
-	case valueobject.PipelineSuccess:
+func mrStateStyle(state string) lipgloss.Style {
+	switch valueobject.MRState(state) {
+	case valueobject.MRMerged:
 		return styles.StatusSuccess
-	case valueobject.PipelineFailed:
+	case valueobject.MRClosed:
 		return styles.StatusFailed
-	case valueobject.PipelineRunning:
+	default:
 		return styles.StatusRunning
-	case valueobject.PipelineManual:
-		return styles.StatusManual
-	default:
-		return styles.StatusPending
 	}
 }
 
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
-}
-
-func (v PipelinesView) View() string {
+func (v MergeRequestsView) View() string {
 	s := ""
 	if v.filtering {
 		s += styles.HelpKey.Render("  Filter: ") + v.Filter + "█\n"
@@ -185,44 +166,49 @@ func (v PipelinesView) View() string {
 	}
 	visible := v.filtered[v.offset:end]
 
-	for i, pl := range visible {
+	for i, mr := range visible {
 		idx := v.offset + i
 		cursor := "  "
 		if idx == v.Cursor {
 			cursor = "▸ "
 		}
-		st := statusStyle(pl.Status)
-		symbol := st.Render(pl.Status.Symbol())
-		status := st.Render(string(pl.Status))
+		st := mrStateStyle(mr.State)
+		state := valueobject.MRState(mr.State)
+		symbol := st.Render(state.Symbol())
+		stateStr := st.Render(mr.State)
 
-		proj := pl.ProjectPath
+		proj := mr.ProjectPath
 		if pidx := strings.LastIndex(proj, "/"); pidx >= 0 {
 			proj = proj[pidx+1:]
 		}
 
-		line := fmt.Sprintf("%s%-16s #%-8d %-16s %s %-12s %s",
-			cursor, proj, pl.ID, pl.Ref, symbol, status, timeAgo(pl.CreatedAt))
+		title := mr.Title
+		if len(title) > 40 {
+			title = title[:37] + "..."
+		}
+		draft := ""
+		if mr.Draft {
+			draft = styles.HelpDesc.Render("[Draft] ")
+		}
+
+		line := fmt.Sprintf("%s%-16s !%-6d %-20s %s %s %-10s @%-12s %s",
+			cursor, proj, mr.IID, mr.SourceBranch, symbol, draft, stateStr, mr.Author, title)
 		s += line + "\n"
 	}
 
-	if total == 0 && len(v.Pipelines) == 0 {
+	if total == 0 && len(v.MRs) == 0 {
 		if v.LoadingStatus != "" {
 			s += styles.HelpDesc.Render("  "+v.LoadingStatus) + "\n"
 		} else {
-			s += styles.HelpDesc.Render("  Loading pipelines...") + "\n"
+			s += styles.HelpDesc.Render("  Loading merge requests...") + "\n"
 		}
 	}
-	if total == 0 && len(v.Pipelines) > 0 {
-		s += styles.HelpDesc.Render("  No pipelines match filter") + "\n"
+	if total == 0 && len(v.MRs) > 0 {
+		s += styles.HelpDesc.Render("  No merge requests match filter") + "\n"
 	}
 
-	// scroll indicator + limit
 	if total > 0 {
-		info := fmt.Sprintf("  %d/%d", v.Cursor+1, total)
-		if v.Limit > 0 {
-			info += fmt.Sprintf("  limit:%d", v.Limit)
-		}
-		s += "\n" + styles.HelpDesc.Render(info) + "\n"
+		s += "\n" + styles.HelpDesc.Render(fmt.Sprintf("  %d/%d", v.Cursor+1, total)) + "\n"
 	}
 
 	return s
