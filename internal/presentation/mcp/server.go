@@ -97,6 +97,11 @@ func NewServer(cfg *config.Config, pSvc *service.PipelineService, jSvc *service.
 	}, createMRHandler(mrSvc))
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_branches",
+		Description: "List repository branches, optionally filtered by name",
+	}, listBranchesHandler(pSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_pipeline_commits",
 		Description: "List commits for a pipeline ref (branch/tag)",
 	}, listPipelineCommitsHandler(mrSvc))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/bearlogin/gitlab-awesome-cli/internal/application/service"
 	"github.com/bearlogin/gitlab-awesome-cli/internal/domain/entity"
@@ -54,6 +55,11 @@ type CreateMRInput struct {
 	Title        string `json:"title" jsonschema:"merge request title"`
 	Description  string `json:"description,omitempty" jsonschema:"merge request description"`
 	Draft        bool   `json:"draft,omitempty" jsonschema:"create as draft MR"`
+}
+
+type ListBranchesInput struct {
+	ProjectID int    `json:"project_id" jsonschema:"GitLab project ID"`
+	Search    string `json:"search,omitempty" jsonschema:"filter branches by name"`
 }
 
 type ListPipelineCommitsInput struct {
@@ -281,6 +287,27 @@ func mergeMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *m
 		}
 		log.Printf("[tool] merge_mr: ok, state=%s", mr.State)
 		return textResult(fmt.Sprintf("Merge request merged: %s", formatMergeRequest(*mr))), nil, nil
+	}
+}
+
+func listBranchesHandler(pSvc *service.PipelineService) func(context.Context, *mcp.CallToolRequest, ListBranchesInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input ListBranchesInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] list_branches: project=%d search=%q", input.ProjectID, input.Search)
+		branches, err := pSvc.ListBranches(ctx, input.ProjectID, input.Search)
+		if err != nil {
+			log.Printf("[tool] list_branches: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] list_branches: ok, %d branches", len(branches))
+		if len(branches) == 0 {
+			return textResult("No branches found."), nil, nil
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "Found %d branch(es):\n\n", len(branches))
+		for _, br := range branches {
+			fmt.Fprintf(&b, "- %s\n", br)
+		}
+		return textResult(b.String()), nil, nil
 	}
 }
 
