@@ -19,6 +19,7 @@ type MergeRequestsView struct {
 	height        int
 	Filter        string
 	filtering     bool
+	loaded        bool
 	LoadingStatus string
 }
 
@@ -71,6 +72,7 @@ func (v *MergeRequestsView) VisibleMRs() []entity.MergeRequest {
 
 func (v *MergeRequestsView) SetMRs(mrs []entity.MergeRequest) {
 	v.MRs = mrs
+	v.loaded = true
 	v.applyFilter()
 }
 
@@ -196,15 +198,18 @@ func (v MergeRequestsView) View() string {
 		s += line + "\n"
 	}
 
-	if total == 0 && len(v.MRs) == 0 {
-		if v.LoadingStatus != "" {
-			s += styles.HelpDesc.Render("  "+v.LoadingStatus) + "\n"
+	if total == 0 {
+		if !v.loaded {
+			if v.LoadingStatus != "" {
+				s += styles.HelpDesc.Render("  "+v.LoadingStatus) + "\n"
+			} else {
+				s += styles.HelpDesc.Render("  Loading merge requests...") + "\n"
+			}
+		} else if v.Filter != "" {
+			s += styles.HelpDesc.Render("  No merge requests match filter") + "\n"
 		} else {
-			s += styles.HelpDesc.Render("  Loading merge requests...") + "\n"
+			s += styles.HelpDesc.Render("  No open merge requests") + "\n"
 		}
-	}
-	if total == 0 && len(v.MRs) > 0 {
-		s += styles.HelpDesc.Render("  No merge requests match filter") + "\n"
 	}
 
 	if total > 0 {

@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	mrFieldSource = iota
+	mrFieldProject = iota
+	mrFieldSource
 	mrFieldTarget
 	mrFieldTitle
 	mrFieldDescription
@@ -19,15 +20,17 @@ const (
 )
 
 type MRCreateSubmitMsg struct {
-	Opts entity.CreateMROptions
+	ProjectPath string
+	Opts        entity.CreateMROptions
 }
 
 type MRCreateCancelMsg struct{}
 
 // MRBranchSearchMsg is sent by the view to request branch search.
 type MRBranchSearchMsg struct {
-	Query string
-	Field int // mrFieldSource or mrFieldTarget
+	ProjectPath string
+	Query       string
+	Field       int // mrFieldSource or mrFieldTarget
 }
 
 // MRBranchSearchResultMsg is returned by the app with branch results.
@@ -41,8 +44,9 @@ type MRCreateView struct {
 	draft       bool
 	cursor      int
 	active      bool
+	projects    []string  // configured project paths
+	projSugs    []string  // filtered project suggestions
 	branches    []string  // suggestions for current branch field
-	branchField int       // which field the suggestions are for
 	sugCursor   int
 	errMsg      string
 }
@@ -53,12 +57,14 @@ func NewMRCreateView() MRCreateView {
 
 func (v MRCreateView) IsInputMode() bool { return v.active }
 
-func (v *MRCreateView) Activate() {
+func (v *MRCreateView) Activate(projects []string) {
 	v.active = true
-	v.cursor = mrFieldSource
+	v.cursor = mrFieldProject
 	v.fields = [mrFieldCount]string{}
 	v.fields[mrFieldTarget] = "main"
 	v.draft = false
+	v.projects = projects
+	v.projSugs = projects // show all initially
 	v.branches = nil
 	v.sugCursor = 0
 	v.errMsg = ""
@@ -81,14 +87,15 @@ func (v MRCreateView) Update(msg tea.Msg) (MRCreateView, tea.Cmd) {
 func (v MRCreateView) handleKey(msg tea.KeyMsg) (MRCreateView, tea.Cmd) {
 	key := msg.String()
 
-	// Branch field with suggestions visible
+	// Suggestion list active (project or branch)
 	if v.hasSuggestions() {
+		sugs := v.currentSuggestions()
 		switch key {
 		case "esc":
-			v.branches = nil
+			v.clearSuggestions()
 			return v, nil
 		case "tab", "down":
-			if v.sugCursor < len(v.branches)-1 {
+			if v.sugCursor < len(sugs)-1 {
 				v.sugCursor++
 			}
 			return v, nil
@@ -98,15 +105,16 @@ func (v MRCreateView) handleKey(msg tea.KeyMsg) (MRCreateView, tea.Cmd) {
 			}
 			return v, nil
 		case "enter":
-			v.fields[v.cursor] = v.branches[v.sugCursor]
-			v.branches = nil
-			// Auto-advance to next field
-			if v.cursor < mrFieldCount-1 {
-				v.cursor++
+			if v.sugCursor < len(sugs) {
+				v.fields[v.cursor] = sugs[v.sugCursor]
+				v.clearSuggestions()
+				if v.cursor < mrFieldCount-1 {
+					v.cursor++
+				}
 			}
 			return v, nil
 		}
-		// Keep typing — fall through to normal input handling
+		// fall through for typing
 	}
 
 	switch key {
@@ -114,12 +122,12 @@ func (v MRCreateView) handleKey(msg tea.KeyMsg) (MRCreateView, tea.Cmd) {
 		v.active = false
 		return v, func() tea.Msg { return MRCreateCancelMsg{} }
 	case "tab", "down":
-		v.branches = nil
+		v.clearSuggestions()
 		if v.cursor < mrFieldCount-1 {
 			v.cursor++
 		}
 	case "shift+tab", "up":
-		v.branches = nil
+		v.clearSuggestions()
 		if v.cursor > 0 {
 			v.cursor--
 		}
@@ -131,8 +139,7 @@ func (v MRCreateView) handleKey(msg tea.KeyMsg) (MRCreateView, tea.Cmd) {
 		if v.cursor == mrFieldDescription {
 			return v.submit()
 		}
-		// Move to next field
-		v.branches = nil
+		v.clearSuggestions()
 		if v.cursor < mrFieldCount-1 {
 			v.cursor++
 		}
@@ -143,21 +150,21 @@ func (v MRCreateView) handleKey(msg tea.KeyMsg) (MRCreateView, tea.Cmd) {
 			v.draft = !v.draft
 			return v, nil
 		}
-		if v.isBranchField() {
-			return v, nil // no spaces in branch names
+		if v.cursor == mrFieldProject || v.isBranchField() {
+			return v, nil // no spaces in project/branch names
 		}
 		v.fields[v.cursor] += " "
 	case "backspace":
 		if v.cursor != mrFieldDraft && len(v.fields[v.cursor]) > 0 {
 			v.fields[v.cursor] = v.fields[v.cursor][:len(v.fields[v.cursor])-1]
-			v.branches = nil
-			return v, v.maybeSearchBranches()
+			v.clearSuggestions()
+			return v, v.onFieldChanged()
 		}
 	default:
 		if v.cursor != mrFieldDraft && len(key) == 1 {
 			v.fields[v.cursor] += key
-			v.branches = nil
-			return v, v.maybeSearchBranches()
+			v.clearSuggestions()
+			return v, v.onFieldChanged()
 		}
 	}
 	return v, nil
@@ -168,28 +175,77 @@ func (v *MRCreateView) isBranchField() bool {
 }
 
 func (v *MRCreateView) hasSuggestions() bool {
-	return len(v.branches) > 0 && v.isBranchField()
+	return len(v.currentSuggestions()) > 0
 }
 
-func (v *MRCreateView) maybeSearchBranches() tea.Cmd {
-	if !v.isBranchField() {
+func (v *MRCreateView) currentSuggestions() []string {
+	if v.cursor == mrFieldProject {
+		return v.projSugs
+	}
+	if v.isBranchField() {
+		return v.branches
+	}
+	return nil
+}
+
+func (v *MRCreateView) clearSuggestions() {
+	v.branches = nil
+	v.projSugs = nil
+	v.sugCursor = 0
+}
+
+func (v *MRCreateView) onFieldChanged() tea.Cmd {
+	if v.cursor == mrFieldProject {
+		v.filterProjects()
 		return nil
 	}
+	if v.isBranchField() {
+		return v.searchBranches()
+	}
+	return nil
+}
+
+func (v *MRCreateView) filterProjects() {
+	q := strings.ToLower(v.fields[mrFieldProject])
+	if q == "" {
+		v.projSugs = v.projects
+		v.sugCursor = 0
+		return
+	}
+	v.projSugs = nil
+	for _, p := range v.projects {
+		if strings.Contains(strings.ToLower(p), q) {
+			v.projSugs = append(v.projSugs, p)
+		}
+	}
+	v.sugCursor = 0
+}
+
+func (v *MRCreateView) searchBranches() tea.Cmd {
 	q := v.fields[v.cursor]
 	if len(q) < 1 {
 		return nil
 	}
+	proj := v.fields[mrFieldProject]
+	if proj == "" {
+		return nil
+	}
 	field := v.cursor
 	return func() tea.Msg {
-		return MRBranchSearchMsg{Query: q, Field: field}
+		return MRBranchSearchMsg{ProjectPath: proj, Query: q, Field: field}
 	}
 }
 
 func (v MRCreateView) submit() (MRCreateView, tea.Cmd) {
+	project := strings.TrimSpace(v.fields[mrFieldProject])
 	source := strings.TrimSpace(v.fields[mrFieldSource])
 	target := strings.TrimSpace(v.fields[mrFieldTarget])
 	title := strings.TrimSpace(v.fields[mrFieldTitle])
 
+	if project == "" {
+		v.errMsg = "Project is required"
+		return v, nil
+	}
 	if source == "" || target == "" || title == "" {
 		v.errMsg = "Source, target and title are required"
 		return v, nil
@@ -208,11 +264,12 @@ func (v MRCreateView) submit() (MRCreateView, tea.Cmd) {
 		Draft:        v.draft,
 	}
 	v.active = false
-	return v, func() tea.Msg { return MRCreateSubmitMsg{Opts: opts} }
+	return v, func() tea.Msg { return MRCreateSubmitMsg{ProjectPath: project, Opts: opts} }
 }
 
 func (v MRCreateView) View() string {
 	labels := [mrFieldCount]string{
+		"Project",
 		"Source Branch",
 		"Target Branch",
 		"Title",
@@ -245,16 +302,17 @@ func (v MRCreateView) View() string {
 			s += fmt.Sprintf("%s%s %s", cursor, styles.HelpKey.Render(label), value) + "\n"
 		}
 
-		// Show branch suggestions below the active branch field
-		if i == v.cursor && v.hasSuggestions() {
-			for j, b := range v.branches {
+		// Show suggestions below the active field
+		if i == v.cursor {
+			sugs := v.currentSuggestions()
+			for j, sg := range sugs {
 				sc := "   "
 				style := styles.HelpDesc
 				if j == v.sugCursor {
 					sc = " ▸ "
 					style = styles.Selected
 				}
-				s += style.Render(fmt.Sprintf("  %s%s", sc, b)) + "\n"
+				s += style.Render(fmt.Sprintf("  %s%s", sc, sg)) + "\n"
 			}
 		}
 	}

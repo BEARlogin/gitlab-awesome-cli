@@ -282,12 +282,6 @@ func (a App) doMergeMR(projectID, mrIID int) tea.Cmd {
 	}
 }
 
-func (a App) doCreateMR(projectID int, opts entity.CreateMROptions) tea.Cmd {
-	return func() tea.Msg {
-		mr, err := a.mrSvc.CreateMR(context.Background(), projectID, opts)
-		return mrCreatedMsg{mr: mr, err: err}
-	}
-}
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.confirmDialog != nil {
@@ -434,10 +428,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.loadMRDetail(a.selectedMR.ProjectID, a.selectedMR.IID)
 		}
 	case views.MRCreateSubmitMsg:
-		if a.selectedProject != nil {
-			a.loading = true
-			a.loadingStatus = "Creating merge request..."
-			return a, a.doCreateMR(a.selectedProject.ID, msg.Opts)
+		a.loading = true
+		a.loadingStatus = "Creating merge request..."
+		projectPath := msg.ProjectPath
+		opts := msg.Opts
+		return a, func() tea.Msg {
+			// Resolve project ID from path
+			projects, err := a.pipelineSvc.LoadProjects(context.Background(), []string{projectPath})
+			if err != nil || len(projects) == 0 {
+				if err == nil {
+					err = fmt.Errorf("project %q not found", projectPath)
+				}
+				return errMsg{err}
+			}
+			mr, err := a.mrSvc.CreateMR(context.Background(), projects[0].ID, opts)
+			return mrCreatedMsg{mr: mr, err: err}
 		}
 	case views.MRCreateCancelMsg:
 		a.currentView = viewMRs
@@ -494,17 +499,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = a.cfg.Save(config.DefaultPath())
 		return a, a.loadAllPipelines()
 	case views.MRBranchSearchMsg:
-		if a.selectedProject != nil {
-			projID := a.selectedProject.ID
-			field := msg.Field
-			query := msg.Query
-			return a, func() tea.Msg {
-				branches, err := a.pipelineSvc.ListBranches(context.Background(), projID, query)
-				if err != nil {
-					return errMsg{err}
-				}
-				return views.MRBranchSearchResultMsg{Branches: branches, Field: field}
+		projectPath := msg.ProjectPath
+		field := msg.Field
+		query := msg.Query
+		return a, func() tea.Msg {
+			projects, err := a.pipelineSvc.LoadProjects(context.Background(), []string{projectPath})
+			if err != nil || len(projects) == 0 {
+				return views.MRBranchSearchResultMsg{Field: field}
 			}
+			branches, err := a.pipelineSvc.ListBranches(context.Background(), projects[0].ID, query)
+			if err != nil {
+				return views.MRBranchSearchResultMsg{Field: field}
+			}
+			return views.MRBranchSearchResultMsg{Branches: branches, Field: field}
 		}
 	case views.MRBranchSearchResultMsg:
 		a.mrCreateView, _ = a.mrCreateView.Update(msg)
@@ -652,28 +659,9 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 		a.logView, cmd = a.logView.Update(msg)
 	case viewMRs:
 		if msg.String() == "n" {
-			// Determine project: from selectedProject or from highlighted MR
-			projID := 0
-			projPath := ""
-			if a.selectedProject != nil {
-				projID = a.selectedProject.ID
-				projPath = a.selectedProject.PathWithNS
-			} else {
-				mrs := a.mergeRequestsView.VisibleMRs()
-				cur := a.mergeRequestsView.Cursor
-				if cur < len(mrs) {
-					projID = mrs[cur].ProjectID
-					projPath = mrs[cur].ProjectPath
-				}
-			}
-			if projID == 0 {
-				a.err = fmt.Errorf("select a project first (Tab → Projects → Enter)")
-				return nil
-			}
-			a.selectedProject = &entity.Project{ID: projID, PathWithNS: projPath}
-			a.mrCreateView.Activate()
+			a.mrCreateView.Activate(a.cfg.Projects)
 			a.currentView = viewMRCreate
-			a.breadcrumb.Parts = []string{projPath, "New MR"}
+			a.breadcrumb.Parts = []string{"New MR"}
 			return nil
 		}
 		a.mergeRequestsView, cmd = a.mergeRequestsView.Update(msg)
