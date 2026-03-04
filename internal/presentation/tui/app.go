@@ -632,16 +632,16 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	switch a.currentView {
 	case viewProjects:
-		// hotkey 'm' from projects to MRs
-		if msg.String() == "m" {
+		// hotkey 'm' from projects to MRs (only when not in input mode)
+		if msg.String() == "m" && !a.projectsView.IsInputMode() {
 			a.currentView = viewMRs
 			a.breadcrumb.Parts = nil
 			return a.loadAllMRs()
 		}
 		a.projectsView, cmd = a.projectsView.Update(msg)
 	case viewPipelines:
-		// hotkey 'c' from pipelines to commits
-		if msg.String() == "c" && a.pipelinesView.Cursor < len(a.pipelinesView.Pipelines) {
+		// hotkey 'c' from pipelines to commits (only when not in input mode)
+		if msg.String() == "c" && !a.pipelinesView.IsInputMode() && a.pipelinesView.Cursor < len(a.pipelinesView.Pipelines) {
 			pls := a.pipelinesView.Pipelines
 			if len(pls) > 0 {
 				pl := pls[a.pipelinesView.Cursor]
@@ -658,13 +658,13 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 	case viewLog:
 		a.logView, cmd = a.logView.Update(msg)
 	case viewMRs:
-		if msg.String() == "n" {
+		if msg.String() == "n" && !a.mergeRequestsView.IsInputMode() {
 			a.mrCreateView.Activate(a.cfg.Projects)
 			a.currentView = viewMRCreate
 			a.breadcrumb.Parts = []string{"New MR"}
 			return nil
 		}
-		if msg.String() == "r" {
+		if msg.String() == "r" && !a.mergeRequestsView.IsInputMode() {
 			a.mergeRequestsView.Reset()
 			a.loading = true
 			a.loadingStatus = "Refreshing merge requests..."
