@@ -92,6 +92,11 @@ func NewServer(cfg *config.Config, pSvc *service.PipelineService, jSvc *service.
 	}, mergeMRHandler(mrSvc))
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "auto_merge_mr",
+		Description: "Enable auto-merge for a merge request (merges when pipeline succeeds)",
+	}, autoMergeMRHandler(mrSvc))
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_merge_request",
 		Description: "Create a new merge request",
 	}, createMRHandler(mrSvc))

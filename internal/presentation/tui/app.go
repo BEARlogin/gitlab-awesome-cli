@@ -282,6 +282,13 @@ func (a App) doMergeMR(projectID, mrIID int) tea.Cmd {
 	}
 }
 
+func (a App) doAutoMergeMR(projectID, mrIID int) tea.Cmd {
+	return func() tea.Msg {
+		mr, err := a.mrSvc.AutoMergeMR(context.Background(), projectID, mrIID)
+		return mrMergedMsg{mr: mr, err: err}
+	}
+}
+
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.confirmDialog != nil {
@@ -296,6 +303,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return a, a.doApproveMR(result.ProjectID, result.JobID)
 					case "merge_mr":
 						return a, a.doMergeMR(result.ProjectID, result.JobID)
+					case "auto_merge_mr":
+						return a, a.doAutoMergeMR(result.ProjectID, result.JobID)
 					default:
 						return a, a.doJobAction(result.Action, result.ProjectID, result.JobID)
 					}
@@ -597,6 +606,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.MR.IID,
 		)
 		a.confirmDialog = &confirm
+	case views.MRAutoMergeMsg:
+		confirm := components.NewConfirmDialog(
+			fmt.Sprintf("Auto-merge MR !%d when pipeline succeeds?", msg.MR.IID),
+			"auto_merge_mr",
+			msg.MR.ProjectID,
+			msg.MR.IID,
+		)
+		a.confirmDialog = &confirm
 	case views.JobActionMsg:
 		actionLabel := map[string]string{
 			"play":   "Run",
@@ -651,6 +668,12 @@ func (a *App) delegateToView(msg tea.KeyMsg) tea.Cmd {
 				a.breadcrumb.Parts = []string{pl.ProjectPath, pl.Ref, "commits"}
 				return a.loadCommits(pl.ProjectID, pl.Ref)
 			}
+		}
+		if msg.String() == "r" && !a.pipelinesView.IsInputMode() {
+			a.pipelinesView.Reset()
+			a.loading = true
+			a.loadingStatus = "Refreshing pipelines..."
+			return a.loadAllPipelines()
 		}
 		a.pipelinesView, cmd = a.pipelinesView.Update(msg)
 	case viewJobs:
@@ -867,6 +890,7 @@ func (a App) View() string {
 			{Key: "fn↑↓", Desc: "page"},
 			{Key: "Enter", Desc: "jobs"},
 			{Key: "c", Desc: "commits"},
+			{Key: "r", Desc: "refresh"},
 			{Key: "/", Desc: "filter"},
 			{Key: "l", Desc: "limit"},
 			{Key: "Tab", Desc: "next tab"},
@@ -911,6 +935,7 @@ func (a App) View() string {
 			{Key: "r", Desc: "refresh"},
 			{Key: "a", Desc: "approve"},
 			{Key: "m", Desc: "merge"},
+			{Key: "M", Desc: "auto-merge"},
 			{Key: "Esc", Desc: "back"},
 			{Key: "q", Desc: "quit"},
 		}

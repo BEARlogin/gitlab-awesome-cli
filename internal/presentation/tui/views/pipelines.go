@@ -26,6 +26,13 @@ type PipelinesView struct {
 
 func NewPipelinesView() PipelinesView { return PipelinesView{height: 20} }
 
+func (v *PipelinesView) Reset() {
+	v.Pipelines = nil
+	v.filtered = nil
+	v.Cursor = 0
+	v.offset = 0
+}
+
 func (v PipelinesView) IsInputMode() bool { return v.filtering }
 
 type PipelineSelectedMsg struct{ Pipeline entity.Pipeline }

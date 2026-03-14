@@ -44,6 +44,10 @@ func (s *MergeRequestService) MergeMR(ctx context.Context, projectID, mrIID int)
 	return s.mrRepo.Merge(ctx, projectID, mrIID)
 }
 
+func (s *MergeRequestService) AutoMergeMR(ctx context.Context, projectID, mrIID int) (*entity.MergeRequest, error) {
+	return s.mrRepo.AutoMerge(ctx, projectID, mrIID)
+}
+
 func (s *MergeRequestService) ListCommits(ctx context.Context, projectID int, ref string) ([]entity.Commit, error) {
 	return s.commitRepo.ListByRef(ctx, projectID, ref)
 }

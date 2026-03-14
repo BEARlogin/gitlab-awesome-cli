@@ -290,6 +290,19 @@ func mergeMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *m
 	}
 }
 
+func autoMergeMRHandler(mrSvc *service.MergeRequestService) func(context.Context, *mcp.CallToolRequest, MRInput) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, any, error) {
+		log.Printf("[tool] auto_merge_mr: project=%d mr=!%d", input.ProjectID, input.MRIID)
+		mr, err := mrSvc.AutoMergeMR(ctx, input.ProjectID, input.MRIID)
+		if err != nil {
+			log.Printf("[tool] auto_merge_mr: error: %v", err)
+			return errResult(err), nil, nil
+		}
+		log.Printf("[tool] auto_merge_mr: ok, state=%s", mr.State)
+		return textResult(fmt.Sprintf("Auto-merge enabled: %s", formatMergeRequest(*mr))), nil, nil
+	}
+}
+
 func listBranchesHandler(pSvc *service.PipelineService) func(context.Context, *mcp.CallToolRequest, ListBranchesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, input ListBranchesInput) (*mcp.CallToolResult, any, error) {
 		log.Printf("[tool] list_branches: project=%d search=%q", input.ProjectID, input.Search)

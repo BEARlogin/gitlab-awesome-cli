@@ -14,4 +14,5 @@ type MergeRequestRepository interface {
 	Create(ctx context.Context, projectID int, opts entity.CreateMROptions) (*entity.MergeRequest, error)
 	Approve(ctx context.Context, projectID, mrIID int) error
 	Merge(ctx context.Context, projectID, mrIID int) (*entity.MergeRequest, error)
+	AutoMerge(ctx context.Context, projectID, mrIID int) (*entity.MergeRequest, error)
 }

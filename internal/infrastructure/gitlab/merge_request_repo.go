@@ -148,6 +148,20 @@ func (r *MergeRequestRepo) Merge(ctx context.Context, projectID, mrIID int) (*en
 	return &result, nil
 }
 
+func (r *MergeRequestRepo) AutoMerge(ctx context.Context, projectID, mrIID int) (*entity.MergeRequest, error) {
+	log.Printf("[gitlab] AutoMergeMR: project=%d mr=!%d", projectID, mrIID)
+	mr, _, err := r.client.MergeRequests.AcceptMergeRequest(projectID, mrIID, &gogitlab.AcceptMergeRequestOptions{
+		MergeWhenPipelineSucceeds: gogitlab.Ptr(true),
+	}, gogitlab.WithContext(ctx))
+	if err != nil {
+		log.Printf("[gitlab] AutoMergeMR: error: %v", err)
+		return nil, err
+	}
+	log.Printf("[gitlab] AutoMergeMR: ok, state=%s merge_status=%s", mr.State, mr.MergeStatus)
+	result := mapMergeRequest(mr, projectID)
+	return &result, nil
+}
+
 func mapMergeRequest(mr *gogitlab.MergeRequest, projectID int) entity.MergeRequest {
 	m := entity.MergeRequest{
 		ID:           mr.ID,

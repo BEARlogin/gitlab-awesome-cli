@@ -33,6 +33,7 @@ func NewMRDetailView() MRDetailView { return MRDetailView{} }
 
 type MRApproveMsg struct{ MR entity.MergeRequest }
 type MRMergeMsg struct{ MR entity.MergeRequest }
+type MRAutoMergeMsg struct{ MR entity.MergeRequest }
 type MRRefreshMsg struct{ MR entity.MergeRequest }
 type MRApprovedMsg struct{ Err error }
 type MRMergedMsg struct {
@@ -180,6 +181,11 @@ func (v MRDetailView) Update(msg tea.Msg) (MRDetailView, tea.Cmd) {
 			if v.mr != nil && v.mr.State == "opened" {
 				mr := *v.mr
 				return v, func() tea.Msg { return MRMergeMsg{MR: mr} }
+			}
+		case "M":
+			if v.mr != nil && v.mr.State == "opened" {
+				mr := *v.mr
+				return v, func() tea.Msg { return MRAutoMergeMsg{MR: mr} }
 			}
 		}
 	}
